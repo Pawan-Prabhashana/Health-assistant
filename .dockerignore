@@ -1,0 +1,16 @@
+# Root build-context ignore. Each app also ships its own .dockerignore for the
+# per-service build contexts used by docker-compose.
+.git
+.github
+docs
+**/.venv
+**/__pycache__
+**/*.pyc
+**/.pytest_cache
+**/.mypy_cache
+**/.ruff_cache
+**/node_modules
+**/dist
+**/.env
+**/.env.*
+**/.DS_Store

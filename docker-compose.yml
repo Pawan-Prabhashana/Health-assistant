@@ -1,0 +1,58 @@
+name: sahana
+
+services:
+  api:
+    build:
+      context: ./apps/api
+    image: sahana-api:latest
+    restart: unless-stopped
+    environment:
+      SAHANA_APP_ENV: ${SAHANA_APP_ENV:-production}
+      SAHANA_LOG_LEVEL: ${SAHANA_LOG_LEVEL:-INFO}
+      SAHANA_LOG_JSON: ${SAHANA_LOG_JSON:-true}
+      SAHANA_CORS_ALLOW_ORIGINS: ${SAHANA_CORS_ALLOW_ORIGINS:-["http://localhost:8080"]}
+    volumes:
+      - hf_cache:/app/.cache/huggingface
+    networks:
+      - sahana
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request,sys; sys.exit(0) if urllib.request.urlopen('http://127.0.0.1:8000/health/live', timeout=2).status == 200 else sys.exit(1)",
+        ]
+      interval: 15s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+
+  web:
+    build:
+      context: ./apps/web
+    image: sahana-web:latest
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    depends_on:
+      api:
+        condition: service_healthy
+    networks:
+      - sahana
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://127.0.0.1:8080/healthz"]
+      interval: 15s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+
+networks:
+  sahana:
+    driver: bridge
+
+volumes:
+  hf_cache:
+    # Reserved for the local MiniLM sentence-transformer cache used by the
+    # embeddings route in a later phase. Declared now to keep the topology
+    # stable across phases.
