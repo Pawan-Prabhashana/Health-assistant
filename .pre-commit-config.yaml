@@ -1,0 +1,36 @@
+# Pre-commit hooks enforcing repository quality gates.
+# Install once with: uv tool run pre-commit install  (or: pre-commit install)
+minimum_pre_commit_version: "3.5.0"
+
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: trailing-whitespace
+        exclude: ^apps/web/package-lock\.json$
+      - id: end-of-file-fixer
+        exclude: ^apps/web/package-lock\.json$
+      - id: check-yaml
+      - id: check-added-large-files
+      - id: check-merge-conflict
+
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.12.7
+    hooks:
+      - id: ruff
+        name: ruff (lint)
+        args: [--fix]
+        files: ^apps/api/
+      - id: ruff-format
+        name: ruff (format)
+        files: ^apps/api/
+
+  - repo: local
+    hooks:
+      - id: mypy-api
+        name: mypy (api, strict)
+        entry: bash -c 'cd apps/api && uv run mypy --strict src'
+        language: system
+        types: [python]
+        pass_filenames: false
+        files: ^apps/api/
