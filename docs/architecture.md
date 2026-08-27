@@ -65,10 +65,32 @@ and 4 patients. A courtesy `GET /` landing route sits outside that count. As of
 Phase 1, 11 are live: the 3 health/config, the 4 patients, and the 4 sessions.
 The 5 chat endpoints arrive in a later phase.
 
+## What exists as of Phase 4
+
+Phase 4 adds the routing decision graph on top of the LLM layer, with stubbed
+tools and no chat pipeline yet:
+
+- **The graph** (LangGraph): `START` fans out to three parallel classifiers —
+  `guardrail_node`, `router_node`, `cag_node` — that fan into a pure-logic
+  `decide_node`, which dispatches to one of three terminals (`refusal_node`,
+  `cached_answer_node`, `tool_then_synth_node`). See
+  [ADR 0010](adr/0010-decision-graph.md).
+- **State without conflict**: the classifiers write distinct keys; the shared
+  `trace` uses an additive reducer.
+- **`decide_node` precedence** (no LLM, no I/O): out-of-scope wins first, then a
+  gated cache hit (threshold + unexpired + allowlisted route), otherwise proceed
+  on the router's route with a low-confidence fallback to `direct`. Cache gating
+  happens once, at the fan-in, via an ungated `CagCache.peek`.
+- **The `ToolPath` seam**: `tool_then_synth_node` dispatches through a
+  `ToolRegistry` (Phase 4 stubs) and a stub `Synthesizer`; Phase 5/6 swap
+  registrations, not the graph.
+- **Invocation**: `build_graph()` compiles once (reused per request);
+  `run_pipeline(question, context)` returns a typed `PipelineResult` with a
+  PII-free reasoning trace.
+
 ## What exists as of Phase 3
 
-Phase 3 adds the LLM transport the decision graph and synth path will sit on, with
-no routing logic or chat pipeline yet:
+Phase 3 adds the LLM transport the decision graph and synth path sit on:
 
 - **`ChatModel` abstraction + role registry**: `complete`, `complete_structured`
   (JSON-schema-validated with a bounded repair retry), and `stream`; a registry

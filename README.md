@@ -7,18 +7,17 @@ search, or a templated refusal), with a cache short-circuiting repeat FAQs. The
 architecture principle is *outside sync, inside async*: the client sees one clean
 round-trip while the handler fans out concurrent work internally.
 
-This repository is built in ten phases. Phases 0–2 delivered the foundation (app,
-client, config, logging, containers), the Supabase data layer with phone-based
-identity, and the vector layer (Qdrant collections, dual embedders, KB ingestion,
-retriever, and the route-gated CAG cache). **Phase 3 adds the LLM provider
-layer**: a typed `ChatModel` abstraction over a single OpenAI-compatible transport
-with three configured roles (guardrail, router, synth), timeouts and bounded
-retries, structured outputs with a repair retry, streaming, config-driven model
-IDs and prices, a deterministic fake for tests, and an `llm` readiness check. The
-decision graph, tool paths, and chat pipeline arrive in later phases. See
-[`docs/architecture.md`](docs/architecture.md) for the full target design and what
-exists today, and [`docs/data-handling.md`](docs/data-handling.md) for the PII
-posture.
+This repository is built in ten phases. Phases 0–3 delivered the foundation, the
+Supabase data layer with phone-based identity, the vector layer (Qdrant, dual
+embedders, KB ingestion, retriever, route-gated CAG cache), and the LLM provider
+layer (`ChatModel` roles, structured output, streaming, fake mode). **Phase 4 adds
+the decision graph**: a LangGraph pipeline that fans a question out to three
+parallel classifiers (guardrail, router, CAG peek), folds them into a pure-logic
+verdict, and dispatches to one of three terminals (refusal, cached answer, or a
+tool path behind a swappable registry). The real tool paths and streamed synth
+arrive in later phases. See [`docs/architecture.md`](docs/architecture.md) for the
+full target design and what exists today, and
+[`docs/data-handling.md`](docs/data-handling.md) for the PII posture.
 
 ## Topology
 

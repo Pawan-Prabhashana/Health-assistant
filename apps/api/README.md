@@ -99,6 +99,7 @@ src/sahana_api/
   kb/                # KB documents, token chunking, ingestion, KnowledgeRetriever
   cag/               # route-gated KNN-1 answer cache
   llm/               # ChatModel abstraction, provider client, retry, fake, registry
+  graph/             # LangGraph decision graph: state, nodes, decide, tools, pipeline
   routers/           # health, patients, sessions
   schemas/           # Pydantic request/response models
 alembic/             # migration environment and versions
