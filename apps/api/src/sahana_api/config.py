@@ -142,6 +142,20 @@ class Settings(BaseSettings):
     openrouter_title: str = "Sahana"
     model_prices: dict[str, ModelPrice] = Field(default_factory=_default_model_prices)
 
+    # -- Decision graph (Phase 4) -----------------------------------------
+    # ``router_min_confidence`` gates the router's route: below it, the graph
+    # falls back to ``router_fallback_route`` (a documented safe default) rather
+    # than acting on a low-confidence guess. ``cag_route_match_policy`` chooses how
+    # a cache candidate's stored route must relate to the request at the decision
+    # fan-in (see ADR 0010). The CAG threshold and cacheable-routes settings above
+    # are reused, not duplicated.
+    router_min_confidence: float = 0.5
+    router_fallback_route: Literal["crm", "rag", "direct", "web_search"] = "direct"
+    cag_route_match_policy: Literal["any_allowlisted", "match_router"] = "any_allowlisted"
+    refusal_message: str = (
+        "I'm sorry, but I can only answer questions related to hospital services."
+    )
+
     # -- Provider configuration (declared now, consumed in later phases) ---
     # Supabase project references (used by later phases; not read here).
     supabase_url: str | None = None

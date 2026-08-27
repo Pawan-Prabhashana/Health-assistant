@@ -20,6 +20,7 @@ dependencies = [
     "fastembed>=0.4.0,<0.8",
     "openai>=1.50.0,<2",
     "tiktoken>=0.8.0,<0.12",
+    "langgraph>=0.2.0,<1",
 ]
 
 [project.optional-dependencies]
@@ -91,6 +92,12 @@ filterwarnings = [
     # Cloud is version-matched, so this advisory check-warning is test-only noise.
     "ignore:Qdrant client version.*incompatible with server version:UserWarning",
     "ignore:Failed to obtain server version.*:UserWarning",
+    # Emitted at import time from langgraph internals (checkpoint serde); not
+    # something this codebase can act on until langgraph changes its default.
+    "ignore::langchain_core._api.deprecation.LangChainPendingDeprecationWarning",
+    # Emitted by FastAPI/Starlette internals when they build a 422 response using
+    # the renamed status constant; our own code already uses the new name.
+    "ignore:'HTTP_422_UNPROCESSABLE_ENTITY' is deprecated:DeprecationWarning",
 ]
 
 [tool.coverage.run]
