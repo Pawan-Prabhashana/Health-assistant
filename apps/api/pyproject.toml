@@ -16,6 +16,10 @@ dependencies = [
     "asyncpg>=0.30.0,<0.31",
     "alembic>=1.16.0,<2",
     "phonenumbers>=8.13.0,<10",
+    "qdrant-client>=1.12.0,<2",
+    "fastembed>=0.4.0,<0.8",
+    "openai>=1.50.0,<2",
+    "tiktoken>=0.8.0,<0.12",
 ]
 
 [project.optional-dependencies]
@@ -79,6 +83,13 @@ testpaths = ["tests"]
 addopts = "-ra"
 markers = [
     "pg: tests that require a real Postgres (via testcontainers); skipped when Docker is unavailable.",
+    "qdrant: tests that require a real Qdrant (via testcontainers); skipped when Docker is unavailable.",
+]
+filterwarnings = [
+    # The pinned Qdrant test image is older than the client; production Qdrant
+    # Cloud is version-matched, so this advisory check-warning is test-only noise.
+    "ignore:Qdrant client version.*incompatible with server version:UserWarning",
+    "ignore:Failed to obtain server version.*:UserWarning",
 ]
 
 [tool.coverage.run]

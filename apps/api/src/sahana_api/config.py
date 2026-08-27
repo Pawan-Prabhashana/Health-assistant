@@ -65,6 +65,37 @@ class Settings(BaseSettings):
     db_pool_timeout: float = 30.0
     db_echo: bool = False
 
+    # -- Vector store (Qdrant Cloud) --------------------------------------
+    # ``qdrant_url``/``qdrant_api_key`` (below) are the credentials; these are the
+    # collection names. The two collections are sized to two different embedders
+    # (see ADR 0007) and must not be pointed at the same name.
+    qdrant_kb_collection: str = "sahana_kb"
+    qdrant_cag_collection: str = "sahana_cag"
+
+    # -- Embeddings -------------------------------------------------------
+    # OpenAI powers high-quality KB retrieval; the local fastembed MiniLM powers
+    # the cheap, API-free CAG cache. ``fastembed_cache_dir`` should point under the
+    # ``hf_cache`` volume mount in production so the model downloads once.
+    openai_embedding_model: str = "text-embedding-3-small"
+    local_embedding_model: str = "sentence-transformers/all-MiniLM-L6-v2"
+    fastembed_cache_dir: str | None = None
+
+    # -- Knowledge base ---------------------------------------------------
+    # ``kb_embedder`` selects the embedder for the KB corpus. Switching it changes
+    # the vector dimension, so ``sahana_kb`` must be recreated (ingest --recreate).
+    kb_embedder: Literal["openai", "local"] = "openai"
+    kb_chunk_tokens: int = 512
+    kb_chunk_overlap: int = 64
+
+    # -- CAG cache --------------------------------------------------------
+    # Only answers from allowlisted routes may be cached; CRM (patient-specific)
+    # is deliberately excluded so no personalized/PII answer is ever cached.
+    cag_similarity_threshold: float = 0.92
+    cag_ttl_seconds: int = 86400
+    cag_cacheable_routes: list[str] = Field(
+        default_factory=lambda: ["rag", "concierge", "web_search"]
+    )
+
     # -- Provider configuration (declared now, consumed in later phases) ---
     # Supabase project references (used by later phases; not read here).
     supabase_url: str | None = None
