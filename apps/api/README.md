@@ -49,6 +49,21 @@ uv run alembic downgrade base      # reverse them
 uv run python -m sahana_api.seed   # idempotent demo data (make seed)
 ```
 
+## Knowledge base and vector store
+
+The KB corpus lives as Markdown under [`data/kb/`](../../data/kb). Ingest it into
+Qdrant (idempotent; `--recreate` rebuilds the collection, required when the KB
+embedder — and therefore the vector dimension — changes):
+
+```bash
+uv run python -m sahana_api.kb.ingest             # make ingest
+uv run python -m sahana_api.kb.ingest --recreate
+```
+
+`SAHANA_KB_EMBEDDER=local` ingests and queries with the local fastembed MiniLM
+(384-d) and needs no OpenAI key; the default `openai` (1536-d) is for production
+retrieval quality. The CAG answer cache always uses the local embedder.
+
 ## Running locally
 
 ```bash
@@ -79,17 +94,21 @@ src/sahana_api/
   db/                # engine, request-scoped session, postgres readiness check
   models/            # SQLAlchemy ORM models + enums
   repositories/      # typed async repositories per aggregate
+  embeddings/        # Embedder abstraction: OpenAI + local (fastembed) + factory
+  vector/            # Qdrant client, collection provisioning, qdrant readiness
+  kb/                # KB documents, token chunking, ingestion, KnowledgeRetriever
+  cag/               # route-gated KNN-1 answer cache
   routers/           # health, patients, sessions
   schemas/           # Pydantic request/response models
 alembic/             # migration environment and versions
 tests/
-  conftest.py        # ASGI + testcontainers fixtures
-  test_*.py          # health, phone, redaction, repositories, endpoints, migrations
+  conftest.py        # ASGI + testcontainers (postgres, qdrant) fixtures
+  test_*.py          # health, phone, redaction, embeddings, kb, cag, endpoints, ...
 ```
 
-Tests marked `pg` run against a real `pgvector` Postgres via testcontainers and
-skip automatically when Docker is unavailable. Run only the fast tests with
-`uv run pytest -m "not pg"`.
+Tests marked `pg` (Postgres) and `qdrant` run against real containers via
+testcontainers and skip automatically when Docker is unavailable. Run only the
+fast tier with `uv run pytest -m "not pg and not qdrant"`.
 
 ## Configuration
 

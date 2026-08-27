@@ -65,6 +65,29 @@ and 4 patients. A courtesy `GET /` landing route sits outside that count. As of
 Phase 1, 11 are live: the 3 health/config, the 4 patients, and the 4 sessions.
 The 5 chat endpoints arrive in a later phase.
 
+## What exists as of Phase 2
+
+Phase 2 adds the two vector-backed capabilities the RAG and CAG paths depend on,
+with no chat pipeline or LLM providers yet:
+
+- **Vector store**: a Qdrant client and idempotent collection provisioning at the
+  active embedder's dimension. Two collections — `sahana_kb` (RAG corpus, OpenAI
+  1536-d) and `sahana_cag` (answer cache, local MiniLM 384-d). See
+  [ADR 0007](adr/0007-vector-store-and-embedders.md).
+- **Embedders**: an `Embedder` abstraction with `OpenAIEmbedder` and a local
+  `LocalEmbedder` (fastembed/ONNX, no torch), selected by config. The local model
+  caches into the `hf_cache` volume and runs offline after first download.
+- **KB ingestion**: `python -m sahana_api.kb.ingest` loads `data/kb/` Markdown,
+  chunks it token-aware (tiktoken) with overlap, embeds it, and upserts into
+  `sahana_kb` with deterministic point IDs (idempotent; `--recreate` rebuilds).
+- **KnowledgeRetriever**: `search(query, top_k) -> list[ScoredChunk]`, scored and
+  payload-bearing, consumed by the RAG tool and CRAG grading in Phase 5.
+- **CAG cache**: a route-gated KNN-1 cache with threshold, TTL, `hit_count`, and a
+  no-PII invariant (CRM never cached). See
+  [ADR 0008](adr/0008-cag-cache-design.md).
+- **Readiness**: a `qdrant` check joins `postgres`, so `/health/ready` reports
+  both and returns `503` when either is down while `/health/live` stays `200`.
+
 ## What exists as of Phase 1
 
 Phase 1 adds the persistence foundation and identity surface on top of Phase 0:
