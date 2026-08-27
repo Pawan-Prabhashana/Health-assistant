@@ -13,6 +13,9 @@ Two families of fixtures live here:
 
 from __future__ import annotations
 
+import time
+import urllib.request
+import uuid
 from collections.abc import AsyncIterator, Iterator
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -22,17 +25,22 @@ from alembic import command
 from alembic.config import Config
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
+from qdrant_client import AsyncQdrantClient
 from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine, AsyncSession, create_async_engine
 from sqlalchemy.pool import NullPool
 
 from sahana_api.config import Settings
 from sahana_api.db.session import get_session
+from sahana_api.embeddings.local import LocalEmbedder
+from sahana_api.kb.chunking import TokenChunker
 from sahana_api.main import create_app
 
 if TYPE_CHECKING:
+    from testcontainers.core.container import DockerContainer
     from testcontainers.postgres import PostgresContainer
 
 API_ROOT = Path(__file__).resolve().parents[1]
+KB_ROOT = API_ROOT.parents[1] / "data" / "kb"
 
 
 # ---------------------------------------------------------------------------
@@ -178,3 +186,83 @@ async def pg_client(migrated_url: str, db_session: AsyncSession) -> AsyncIterato
         AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver") as async_client,
     ):
         yield async_client
+
+
+# ---------------------------------------------------------------------------
+# Qdrant-backed fixtures (via testcontainers)
+# ---------------------------------------------------------------------------
+def _wait_for_http(url: str, *, timeout: float = 30.0) -> None:
+    """Poll ``url`` until it returns HTTP 200 or the timeout elapses."""
+    deadline = time.monotonic() + timeout
+    last_error = "timeout"
+    while time.monotonic() < deadline:
+        try:
+            with urllib.request.urlopen(url, timeout=2) as response:
+                if response.status == 200:
+                    return
+        except Exception as exc:  # not ready yet
+            last_error = type(exc).__name__
+        time.sleep(0.5)
+    raise RuntimeError(f"Qdrant did not become ready: {last_error}")
+
+
+@pytest.fixture(scope="session")
+def qdrant_url() -> Iterator[str]:
+    """Start a Qdrant container for the session; skip if Docker is absent."""
+    try:
+        from testcontainers.core.container import DockerContainer
+    except ImportError:  # pragma: no cover - import guard
+        pytest.skip("testcontainers is not installed")
+
+    container: DockerContainer = DockerContainer("qdrant/qdrant:v1.12.4").with_exposed_ports(6333)
+    try:
+        container.start()
+    except Exception as exc:  # Docker unavailable or image cannot start.
+        pytest.skip(f"Docker/Qdrant container unavailable: {type(exc).__name__}")
+    try:
+        host = container.get_container_host_ip()
+        port = int(container.get_exposed_port(6333))
+        url = f"http://{host}:{port}"
+        _wait_for_http(f"{url}/readyz")
+        yield url
+    finally:
+        container.stop()
+
+
+@pytest.fixture
+async def qdrant_client(qdrant_url: str) -> AsyncIterator[AsyncQdrantClient]:
+    """Yield an async Qdrant client bound to the container."""
+    client = AsyncQdrantClient(url=qdrant_url)
+    try:
+        yield client
+    finally:
+        await client.close()
+
+
+@pytest.fixture
+def collection_name() -> str:
+    """Return a unique collection name so tests do not interfere."""
+    return f"test_{uuid.uuid4().hex}"
+
+
+@pytest.fixture(scope="session")
+def local_embedder() -> LocalEmbedder:
+    """Return a shared local (fastembed) embedder; downloads the model once."""
+    return LocalEmbedder()
+
+
+@pytest.fixture
+def kb_root() -> Path:
+    """Return the KB data directory, skipping if it is not present."""
+    if not KB_ROOT.exists():
+        pytest.skip("KB data directory not found")
+    return KB_ROOT
+
+
+@pytest.fixture
+def token_chunker() -> TokenChunker:
+    """Return a TokenChunker, skipping if the tiktoken vocabulary is unavailable."""
+    try:
+        return TokenChunker(chunk_tokens=256, overlap=32)
+    except Exception as exc:  # tiktoken vocabulary unavailable offline
+        pytest.skip(f"tiktoken unavailable: {type(exc).__name__}")
