@@ -65,10 +65,31 @@ and 4 patients. A courtesy `GET /` landing route sits outside that count. As of
 Phase 1, 11 are live: the 3 health/config, the 4 patients, and the 4 sessions.
 The 5 chat endpoints arrive in a later phase.
 
+## What exists as of Phase 5
+
+Phase 5 replaces the Phase 4 stub tools and stub synthesizer with the four real
+proceed paths and a non-streaming synthesizer (still behind the same interfaces):
+
+- **CRM**: identity-gated, own-data-only lookup of status and next appointment;
+  structured table payload for the frontend; figures rendered from repository
+  rows, never from the LLM.
+- **RAG + CRAG**: retrieve top-k, optional per-embedder score gate, batched
+  relevance grading on a cheap role, corrective Tavily fallback, honest
+  not-found. Citations are retrieved chunk `title`/`source` or Tavily URLs.
+- **Direct**: concierge `complete` with no external tool.
+- **Web search**: typed Tavily client (httpx wrapper) with timeout, retries, and
+  a fake mode. Readiness is config-only (`tavily` check).
+- **Synthesizer**: route-specific prompts in `tools/prompts.py`, each carrying
+  the medical-safety posture. CRM framing that drops a figure is reverted to the
+  authoritative payload.
+
+Streaming, chat endpoints, message persistence, CAG store, and the served-hit
+counter are Phase 6.
+
 ## What exists as of Phase 4
 
 Phase 4 adds the routing decision graph on top of the LLM layer, with stubbed
-tools and no chat pipeline yet:
+tools (replaced in Phase 5) and no chat pipeline yet:
 
 - **The graph** (LangGraph): `START` fans out to three parallel classifiers —
   `guardrail_node`, `router_node`, `cag_node` — that fan into a pure-logic
@@ -82,8 +103,8 @@ tools and no chat pipeline yet:
   on the router's route with a low-confidence fallback to `direct`. Cache gating
   happens once, at the fan-in, via an ungated `CagCache.peek`.
 - **The `ToolPath` seam**: `tool_then_synth_node` dispatches through a
-  `ToolRegistry` (Phase 4 stubs) and a stub `Synthesizer`; Phase 5/6 swap
-  registrations, not the graph.
+  `ToolRegistry` and a `Synthesizer`; later phases swap registrations, not the
+  graph.
 - **Invocation**: `build_graph()` compiles once (reused per request);
   `run_pipeline(question, context)` returns a typed `PipelineResult` with a
   PII-free reasoning trace.

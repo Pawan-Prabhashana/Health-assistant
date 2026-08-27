@@ -39,6 +39,19 @@ async def test_fake_structured_parses_into_schema() -> None:
     assert result.usage.total_tokens > 0
 
 
+async def test_fake_structured_by_schema_selects_payload() -> None:
+    class _Grade(BaseModel):
+        relevant: bool
+
+    model = FakeChatModel(
+        structured_payload={"relevant": False},
+        structured_by_schema={"_Grade": {"relevant": True}},
+    )
+    result = await model.complete_structured([Message("user", "q")], _Grade)
+    assert result.value.relevant is True
+    assert model.structured_calls[0][0] == "_Grade"
+
+
 async def test_fake_stream_yields_expected_tokens() -> None:
     model = FakeChatModel(stream_tokens=["a", "b", "c"])
     tokens = [token async for token in model.stream([Message("user", "q")])]

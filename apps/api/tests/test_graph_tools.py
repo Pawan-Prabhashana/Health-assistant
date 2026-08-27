@@ -37,4 +37,4 @@ async def test_stub_synthesizer_is_deterministic() -> None:
     registry = build_stub_registry()
     result = await registry.get(Route.DIRECT).run(ToolRequest("hi", RequestContext()))
     answer = await StubSynthesizer().synthesize("hi", result)
-    assert answer.startswith("[direct] ")
+    assert answer.answer.startswith("[direct] ")

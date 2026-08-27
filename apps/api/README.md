@@ -100,6 +100,7 @@ src/sahana_api/
   cag/               # route-gated KNN-1 answer cache
   llm/               # ChatModel abstraction, provider client, retry, fake, registry
   graph/             # LangGraph decision graph: state, nodes, decide, tools, pipeline
+  tools/             # CRM, RAG/CRAG, direct, Tavily/web, synthesizer, prompt module
   routers/           # health, patients, sessions
   schemas/           # Pydantic request/response models
 alembic/             # migration environment and versions
