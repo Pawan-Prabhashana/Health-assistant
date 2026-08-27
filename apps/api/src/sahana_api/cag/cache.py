@@ -49,6 +49,21 @@ class CachedAnswer:
     score: float
 
 
+@dataclass(frozen=True)
+class CagCandidate:
+    """The nearest cached entry from a route-agnostic, ungated KNN-1 peek.
+
+    Unlike :meth:`CagCache.lookup`, a peek applies no threshold, TTL, or route
+    gating and does not mutate the cache; the decision graph gates it at the
+    fan-in (see ADR 0010).
+    """
+
+    answer: str
+    route: str
+    score: float
+    expired: bool
+
+
 def _now() -> datetime.datetime:
     return datetime.datetime.now(datetime.UTC)
 
@@ -118,6 +133,37 @@ class CagCache:
             points=[PointStruct(id=_point_id(question), vector=vector, payload=payload)],
         )
         return True
+
+    async def peek(self, question: str) -> CagCandidate | None:
+        """Return the nearest cached candidate without gating or mutation.
+
+        Applies no threshold, TTL, or route filter and does not increment
+        ``hit_count`` — the decision graph gates the candidate at its fan-in.
+        """
+        await self._ensure_collection()
+        vector = (await self._embedder.embed([question]))[0]
+        response = await self._client.query_points(
+            collection_name=self._collection,
+            query=vector,
+            limit=1,
+            with_payload=True,
+        )
+        if not response.points:
+            return None
+
+        top = response.points[0]
+        payload = top.payload or {}
+        expires_at = (
+            datetime.datetime.fromisoformat(payload[_EXPIRES_AT])
+            if payload.get(_EXPIRES_AT) is not None
+            else None
+        )
+        return CagCandidate(
+            answer=str(payload[_ANSWER]),
+            route=str(payload[_ROUTE]),
+            score=top.score,
+            expired=expires_at is not None and _now() > expires_at,
+        )
 
     async def lookup(self, question: str, route: str | None = None) -> CachedAnswer | None:
         """Return a cached answer when one matches above threshold, unexpired, and route-allowed."""
