@@ -7,12 +7,16 @@ search, or a templated refusal), with a cache short-circuiting repeat FAQs. The
 architecture principle is *outside sync, inside async*: the client sees one clean
 round-trip while the handler fans out concurrent work internally.
 
-This repository is built in ten phases. **Phase 0 delivers the foundation only**:
-the FastAPI application, the React client, configuration, logging, tooling, and
-the container topology. The three health/config endpoints are the Phase 0 feature
-surface. Chat, routing, the decision graph, persistence, vector search, and LLM
-providers arrive in later phases. See [`docs/architecture.md`](docs/architecture.md)
-for the full target design and what exists today.
+This repository is built in ten phases. Phase 0 delivered the foundation (the
+FastAPI application, the React client, configuration, logging, tooling, and the
+container topology). **Phase 1 adds the data layer and identity surface**:
+SQLAlchemy 2.0 async persistence against Supabase Postgres, an initial Alembic
+migration, typed repositories, and the four patient and four session endpoints,
+with a `postgres` readiness check and a PDPA data-handling posture. Chat, routing,
+the decision graph, vector search, and LLM providers arrive in later phases. See
+[`docs/architecture.md`](docs/architecture.md) for the full target design and what
+exists today, and [`docs/data-handling.md`](docs/data-handling.md) for the PII
+posture.
 
 ## Topology
 

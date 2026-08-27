@@ -61,7 +61,32 @@ in a single outward round-trip.
 ## Endpoint surface (planned)
 
 The finished backend exposes 16 endpoints: 3 health/config, 5 chat, 4 sessions,
-and 4 patients. A courtesy `GET /` landing route sits outside that count.
+and 4 patients. A courtesy `GET /` landing route sits outside that count. As of
+Phase 1, 11 are live: the 3 health/config, the 4 patients, and the 4 sessions.
+The 5 chat endpoints arrive in a later phase.
+
+## What exists as of Phase 1
+
+Phase 1 adds the persistence foundation and identity surface on top of Phase 0:
+
+- **Database**: SQLAlchemy 2.0 async + asyncpg against Supabase Postgres, with a
+  request-scoped `get_session` dependency and an engine configured for the
+  Supabase transaction pooler (`statement_cache_size=0`). See
+  [ADR 0004](adr/0004-persistence-stack.md).
+- **Schema** (initial Alembic migration): `patients`, `appointments`, `sessions`,
+  `messages`; the `vector` extension is enabled to reserve the RAG capability
+  (no vector columns yet). See [ADR 0005](adr/0005-data-model-and-identity.md).
+- **Identity**: patients are keyed by E.164 phone; MRNs (`P-10023`) come from a
+  sequence. Four patient endpoints (upsert-by-phone, get-by-id, resolve-by-phone,
+  erase) and four session endpoints (create, list-by-patient, get, delete).
+- **Typed async repositories** per aggregate; SQLAlchemy types never cross the
+  route boundary.
+- **Readiness**: a `postgres` `SELECT 1` check is registered, so `/health/ready`
+  returns `503` when the database is unreachable while `/health/live` stays `200`.
+- **PDPA posture**: log redaction of PII, PII-free list/error responses, and a
+  genuine cascading erasure endpoint. See
+  [ADR 0006](adr/0006-pii-pdpa-handling.md) and
+  [data-handling.md](data-handling.md).
 
 ## What exists as of Phase 0
 
