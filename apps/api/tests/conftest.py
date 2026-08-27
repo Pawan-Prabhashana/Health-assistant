@@ -56,6 +56,7 @@ def settings() -> Settings:
         cors_allow_origins=["http://localhost:8080"],
         database_url=None,
         database_migration_url=None,
+        llm_mode="fake",
     )
 
 
@@ -174,6 +175,7 @@ async def pg_client(migrated_url: str, db_session: AsyncSession) -> AsyncIterato
             log_json=False,
             database_url=migrated_url,
             database_migration_url=migrated_url,
+            llm_mode="fake",
         )
     )
 

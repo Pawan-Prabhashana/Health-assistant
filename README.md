@@ -7,17 +7,18 @@ search, or a templated refusal), with a cache short-circuiting repeat FAQs. The
 architecture principle is *outside sync, inside async*: the client sees one clean
 round-trip while the handler fans out concurrent work internally.
 
-This repository is built in ten phases. Phase 0 delivered the foundation (app,
-client, config, logging, tooling, containers); Phase 1 added the Supabase data
-layer, phone-based identity, and the patient/session endpoints. **Phase 2 adds
-the vector-backed knowledge and cache layer**: a Qdrant client and collections, a
-dual-embedder abstraction (OpenAI for the KB corpus, local fastembed MiniLM for
-the CAG cache), an idempotent KB ingestion pipeline, a `KnowledgeRetriever`, and
-route-gated CAG cache primitives, with a `qdrant` readiness check. The decision
-graph, tool paths, LLM providers, and the chat pipeline arrive in later phases.
-See [`docs/architecture.md`](docs/architecture.md) for the full target design and
-what exists today, and [`docs/data-handling.md`](docs/data-handling.md) for the
-PII posture.
+This repository is built in ten phases. Phases 0–2 delivered the foundation (app,
+client, config, logging, containers), the Supabase data layer with phone-based
+identity, and the vector layer (Qdrant collections, dual embedders, KB ingestion,
+retriever, and the route-gated CAG cache). **Phase 3 adds the LLM provider
+layer**: a typed `ChatModel` abstraction over a single OpenAI-compatible transport
+with three configured roles (guardrail, router, synth), timeouts and bounded
+retries, structured outputs with a repair retry, streaming, config-driven model
+IDs and prices, a deterministic fake for tests, and an `llm` readiness check. The
+decision graph, tool paths, and chat pipeline arrive in later phases. See
+[`docs/architecture.md`](docs/architecture.md) for the full target design and what
+exists today, and [`docs/data-handling.md`](docs/data-handling.md) for the PII
+posture.
 
 ## Topology
 

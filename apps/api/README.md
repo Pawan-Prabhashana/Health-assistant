@@ -98,6 +98,7 @@ src/sahana_api/
   vector/            # Qdrant client, collection provisioning, qdrant readiness
   kb/                # KB documents, token chunking, ingestion, KnowledgeRetriever
   cag/               # route-gated KNN-1 answer cache
+  llm/               # ChatModel abstraction, provider client, retry, fake, registry
   routers/           # health, patients, sessions
   schemas/           # Pydantic request/response models
 alembic/             # migration environment and versions

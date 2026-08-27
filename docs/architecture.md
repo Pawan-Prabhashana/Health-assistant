@@ -65,10 +65,35 @@ and 4 patients. A courtesy `GET /` landing route sits outside that count. As of
 Phase 1, 11 are live: the 3 health/config, the 4 patients, and the 4 sessions.
 The 5 chat endpoints arrive in a later phase.
 
+## What exists as of Phase 3
+
+Phase 3 adds the LLM transport the decision graph and synth path will sit on, with
+no routing logic or chat pipeline yet:
+
+- **`ChatModel` abstraction + role registry**: `complete`, `complete_structured`
+  (JSON-schema-validated with a bounded repair retry), and `stream`; a registry
+  maps `guardrail | router | synth` to a configured model via `get_model(role)`.
+- **One OpenAI-compatible transport**: a single `AsyncOpenAI` client configured
+  per provider (Groq for guardrail/router, OpenRouter for synth) by `base_url`,
+  key, and attribution headers. See [ADR 0009](adr/0009-llm-provider-layer.md).
+- **Resilience**: per-attempt timeout, bounded exponential backoff with jitter,
+  retrying only transient failures (timeout, connection, 429, 5xx) and respecting
+  `Retry-After`; streams are not retried.
+- **Accounting**: every call emits a structured `llm.usage` log (role, model,
+  tokens, estimated cost from a config price table, latency) with no message
+  content.
+- **Config-driven models**: no model ID, base URL, or price is hardcoded; all are
+  `Settings` fields, so swaps (including the documented deprecation forward paths)
+  are config changes.
+- **Fake mode**: a deterministic `FakeChatModel` and `llm_mode` (`live | fake`)
+  make the whole system testable without network or keys.
+- **Readiness**: a config-only `llm` check joins `postgres` and `qdrant`;
+  `/health/ready` reports all three and is `503` when LLM config is missing, while
+  `/health/live` stays `200`.
+
 ## What exists as of Phase 2
 
-Phase 2 adds the two vector-backed capabilities the RAG and CAG paths depend on,
-with no chat pipeline or LLM providers yet:
+Phase 2 adds the two vector-backed capabilities the RAG and CAG paths depend on:
 
 - **Vector store**: a Qdrant client and idempotent collection provisioning at the
   active embedder's dimension. Two collections — `sahana_kb` (RAG corpus, OpenAI

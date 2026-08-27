@@ -84,6 +84,7 @@ addopts = "-ra"
 markers = [
     "pg: tests that require a real Postgres (via testcontainers); skipped when Docker is unavailable.",
     "qdrant: tests that require a real Qdrant (via testcontainers); skipped when Docker is unavailable.",
+    "llm_live: opt-in contract tests making one real provider call; skipped unless the key is present.",
 ]
 filterwarnings = [
     # The pinned Qdrant test image is older than the client; production Qdrant

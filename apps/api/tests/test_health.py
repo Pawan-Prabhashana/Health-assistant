@@ -26,7 +26,10 @@ async def test_readiness_ready_path(client: AsyncClient) -> None:
 
     assert response.status_code == 200
     body = response.json()
-    assert body == {"ready": True, "checks": []}
+    assert body["ready"] is True
+    # No database/vector store configured here; the LLM check runs in fake mode.
+    assert all(check["ok"] for check in body["checks"])
+    assert any(check["name"] == "llm" for check in body["checks"])
 
 
 async def test_readiness_reports_failing_dependency(app: FastAPI, client: AsyncClient) -> None:
@@ -42,7 +45,8 @@ async def test_readiness_reports_failing_dependency(app: FastAPI, client: AsyncC
     assert response.status_code == 503
     body = response.json()
     assert body["ready"] is False
-    assert body["checks"] == [{"name": "postgres", "ok": False, "detail": "connection refused"}]
+    postgres = next(check for check in body["checks"] if check["name"] == "postgres")
+    assert postgres == {"name": "postgres", "ok": False, "detail": "connection refused"}
 
 
 async def test_config_contains_expected_keys(client: AsyncClient) -> None:
