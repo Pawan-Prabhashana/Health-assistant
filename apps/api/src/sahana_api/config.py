@@ -156,6 +156,27 @@ class Settings(BaseSettings):
         "I'm sorry, but I can only answer questions related to hospital services."
     )
 
+    # -- Tool paths: CRAG (RAG grading) and Tavily (web search); see ADR 0011 --
+    # RAG retrieves ``rag_top_k`` chunks, then a cheap grader model
+    # (``crag_grader_role``) grades relevance in one batched call. Relevance — not
+    # a raw similarity score — decides usefulness; the optional per-embedder score
+    # gates are advisory (0.0 disables) and exist because the two embedders score
+    # on different scales. On zero relevant chunks the corrective fallback (when
+    # enabled) queries the web tool, then honestly reports not-found.
+    rag_top_k: int = 4
+    crag_grader_role: Literal["guardrail", "router", "synth"] = "guardrail"
+    crag_min_relevant: int = 1
+    crag_corrective_fallback: bool = True
+    rag_score_gate_openai: float = 0.2
+    rag_score_gate_local: float = 0.3
+    # Tavily web search. ``tavily_mode`` selects the real client or the fake, like
+    # ``llm_mode``. The key is read from ``tavily_api_key`` in the provider block.
+    tavily_mode: LLMMode = "live"
+    tavily_base_url: str = "https://api.tavily.com"
+    tavily_max_results: int = 5
+    tavily_timeout_seconds: float = 10.0
+    tavily_max_retries: int = 2
+
     # -- Provider configuration (declared now, consumed in later phases) ---
     # Supabase project references (used by later phases; not read here).
     supabase_url: str | None = None
