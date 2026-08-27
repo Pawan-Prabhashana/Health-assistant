@@ -5,7 +5,7 @@ API_DIR := apps/api
 WEB_DIR := apps/web
 
 .DEFAULT_GOAL := help
-.PHONY: help install lint format typecheck test migrate migrate-down seed up down logs ps clean
+.PHONY: help install lint format typecheck test migrate migrate-down seed ingest up down logs ps clean
 
 help: ## List available targets
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) \
@@ -41,6 +41,9 @@ migrate-down: ## Reverse all database migrations (Alembic, direct connection)
 
 seed: ## Populate idempotent demo data
 	cd $(API_DIR) && uv run python -m sahana_api.seed
+
+ingest: ## Ingest the knowledge base into Qdrant (idempotent; --recreate to rebuild)
+	cd $(API_DIR) && uv run python -m sahana_api.kb.ingest
 
 up: ## Build and start the container stack in the background
 	docker compose up --build -d
