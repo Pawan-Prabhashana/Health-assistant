@@ -148,15 +148,21 @@ def make_tool_then_synth_node(
         route = state.get("route_taken") or fallback_route
         handler = tools.get(route)
         result = await handler.run(ToolRequest(state["question"], state["context"]))
-        answer = await synth.synthesize(state["question"], result)
+        synthesis = await synth.synthesize(state["question"], result)
         entry = TraceEntry(
             "tool_then_synth",
             {
                 "route": route.value,
-                "citations": len(result.citations),
-                "stub": bool(result.metadata.get("stub", False)),
+                "status": str(result.metadata.get("status", "ok")),
+                "citations": len(synthesis.citations),
+                "structured": synthesis.structured is not None,
             },
         )
-        return {"answer": answer, "trace": [entry]}
+        return {
+            "answer": synthesis.answer,
+            "citations": synthesis.citations,
+            "structured": synthesis.structured,
+            "trace": [entry],
+        }
 
     return tool_then_synth_node

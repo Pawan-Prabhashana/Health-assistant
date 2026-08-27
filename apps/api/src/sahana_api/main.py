@@ -20,14 +20,18 @@ from sahana_api.cag.cache import CagCache
 from sahana_api.config import Settings, get_settings
 from sahana_api.db.engine import Database
 from sahana_api.db.health import make_postgres_check
-from sahana_api.embeddings.factory import build_local_embedder
+from sahana_api.embeddings.base import EmbeddingError
+from sahana_api.embeddings.factory import build_kb_embedder, build_local_embedder
 from sahana_api.errors import register_exception_handlers
-from sahana_api.graph.pipeline import build_graph, build_stub_deps
+from sahana_api.graph.pipeline import build_graph
+from sahana_api.kb.retriever import KnowledgeRetriever
 from sahana_api.llm.health import make_llm_check
 from sahana_api.llm.registry import ModelRegistry, build_model_registry
 from sahana_api.logging import configure_logging, get_logger
 from sahana_api.readiness import ReadinessRegistry
 from sahana_api.routers import health_router, patients_router, sessions_router
+from sahana_api.tools.tavily import build_tavily_client, make_tavily_check
+from sahana_api.tools.wiring import build_real_deps
 from sahana_api.vector.client import VectorStore
 from sahana_api.vector.health import make_qdrant_check
 from sahana_api.version import __version__
@@ -73,9 +77,14 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.llm = models
     logger.info("llm.configured", mode=settings.llm_mode, roles=sorted(models.configured_roles()))
 
+    registry.register(make_tavily_check(settings))
+    tavily = build_tavily_client(settings)
+    logger.info("tavily.configured", mode=settings.tavily_mode)
+
     # Compile the decision graph once and reuse it. The CAG cache is attached when
     # a vector store is configured; otherwise the graph runs without a cache.
     cag_cache: CagCache | None = None
+    retriever: KnowledgeRetriever | None = None
     if vector is not None:
         cag_cache = CagCache(
             vector.client,
@@ -85,7 +94,25 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             ttl_seconds=settings.cag_ttl_seconds,
             cacheable_routes=settings.cag_cacheable_routes,
         )
-    app.state.graph = build_graph(build_stub_deps(settings, models, cag_cache))
+        try:
+            retriever = KnowledgeRetriever(
+                vector.client,
+                settings.qdrant_kb_collection,
+                build_kb_embedder(settings),
+            )
+        except EmbeddingError:
+            logger.warning("kb_retriever.not_configured")
+    session_provider = None if database is None else database.sessionmaker
+    app.state.graph = build_graph(
+        build_real_deps(
+            settings,
+            models,
+            cag_cache,
+            session_provider=session_provider,
+            retriever=retriever,
+            tavily=tavily,
+        )
+    )
     logger.info("graph.compiled", cag_enabled=cag_cache is not None)
 
     logger.info(

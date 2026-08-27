@@ -2,9 +2,9 @@
 
 ``build_graph`` compiles the LangGraph once from a set of dependencies; the
 compiled graph is reused for every request (never rebuilt per call).
-``run_pipeline`` invokes it and returns a typed :class:`PipelineResult`. Phase 6
-wires this into the chat endpoints with streaming; Phase 5 swaps the stub tool
-handlers and synth for the real ones without touching the graph.
+``run_pipeline`` invokes it and returns a typed :class:`PipelineResult`. Phase 5
+registers the real tools and completing synthesizer; Phase 6 wires this into the
+chat endpoints and swaps ``complete`` for ``stream``. The graph shape is unchanged.
 """
 
 from __future__ import annotations
@@ -28,7 +28,7 @@ from sahana_api.graph.nodes import (
     make_tool_then_synth_node,
 )
 from sahana_api.graph.schemas import Route, Verdict
-from sahana_api.graph.state import GraphState, RequestContext, TraceEntry
+from sahana_api.graph.state import GraphState, RequestContext, StructuredTable, TraceEntry
 from sahana_api.graph.tools import (
     StubSynthesizer,
     Synthesizer,
@@ -62,6 +62,8 @@ class PipelineResult:
     verdict: Verdict
     route: Route | None
     answer: str
+    citations: list[str]
+    structured: StructuredTable | None
     trace: list[TraceEntry]
 
 
@@ -151,5 +153,7 @@ async def run_pipeline(
         verdict=verdict,
         route=final.get("route_taken"),
         answer=final.get("answer") or "",
+        citations=final.get("citations") or [],
+        structured=final.get("structured"),
         trace=final.get("trace", []),
     )

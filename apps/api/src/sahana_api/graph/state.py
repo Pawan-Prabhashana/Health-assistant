@@ -21,8 +21,17 @@ __all__ = [
     "CagCandidate",
     "GraphState",
     "RequestContext",
+    "StructuredTable",
     "TraceEntry",
 ]
+
+
+@dataclass(frozen=True)
+class StructuredTable:
+    """A column/row table an authoritative tool renders (e.g. the CRM reply)."""
+
+    columns: list[str]
+    rows: list[list[str]]
 
 
 @dataclass(frozen=True)
@@ -60,4 +69,6 @@ class GraphState(TypedDict, total=False):
     verdict: Verdict | None
     route_taken: Route | None
     answer: str | None
+    citations: list[str]
+    structured: StructuredTable | None
     trace: Annotated[list[TraceEntry], operator.add]

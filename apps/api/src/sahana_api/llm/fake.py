@@ -41,6 +41,7 @@ class FakeChatModel(ChatModel):
         model: str = "fake-model",
         text: str = "This is a canned Sahana response.",
         structured_payload: dict[str, Any] | None = None,
+        structured_by_schema: dict[str, dict[str, Any]] | None = None,
         stream_tokens: list[str] | None = None,
         latency_ms: float = 1.0,
         failures: int = 0,
@@ -50,10 +51,16 @@ class FakeChatModel(ChatModel):
         self._model = model
         self._text = text
         self._structured_payload = structured_payload if structured_payload is not None else {}
+        if structured_by_schema is not None:
+            self._structured_by_schema = structured_by_schema
+        else:
+            self._structured_by_schema = {}
         self._stream_tokens = stream_tokens if stream_tokens is not None else list(_DEFAULT_STREAM)
         self._latency_ms = latency_ms
         self._remaining_failures = failures
         self._failure = failure if failure is not None else LLMResponseError("injected failure")
+        self.complete_calls: list[list[Message]] = []
+        self.structured_calls: list[tuple[str, list[Message]]] = []
 
     @property
     def model(self) -> str:
@@ -81,6 +88,7 @@ class FakeChatModel(ChatModel):
         max_tokens: int | None = None,
     ) -> Completion:
         self._maybe_fail()
+        self.complete_calls.append(list(messages))
         prompt_tokens = _rough_tokens("".join(message.content for message in messages))
         usage = self._usage(prompt_tokens, _rough_tokens(self._text))
         log_usage(self._role, self._model, usage)
@@ -95,7 +103,9 @@ class FakeChatModel(ChatModel):
         max_tokens: int | None = None,
     ) -> StructuredCompletion[T]:
         self._maybe_fail()
-        value = schema.model_validate(self._structured_payload)
+        self.structured_calls.append((schema.__name__, list(messages)))
+        payload = self._structured_by_schema.get(schema.__name__, self._structured_payload)
+        value = schema.model_validate(payload)
         raw_text = value.model_dump_json()
         prompt_tokens = _rough_tokens("".join(message.content for message in messages))
         usage = self._usage(prompt_tokens, _rough_tokens(raw_text))

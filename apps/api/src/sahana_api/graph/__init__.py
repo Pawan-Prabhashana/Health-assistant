@@ -13,9 +13,10 @@ from sahana_api.graph.pipeline import (
     run_pipeline,
 )
 from sahana_api.graph.schemas import GuardrailVerdict, Route, RouteDecision, Verdict
-from sahana_api.graph.state import GraphState, RequestContext, TraceEntry
+from sahana_api.graph.state import GraphState, RequestContext, StructuredTable, TraceEntry
 from sahana_api.graph.tools import (
     StubSynthesizer,
+    SynthesisResult,
     Synthesizer,
     ToolNotRegisteredError,
     ToolPath,
@@ -24,6 +25,7 @@ from sahana_api.graph.tools import (
     ToolResult,
     build_stub_registry,
 )
+from sahana_api.tools.wiring import build_real_deps
 
 __all__ = [
     "CompiledGraph",
@@ -36,7 +38,9 @@ __all__ = [
     "RequestContext",
     "Route",
     "RouteDecision",
+    "StructuredTable",
     "StubSynthesizer",
+    "SynthesisResult",
     "Synthesizer",
     "ToolNotRegisteredError",
     "ToolPath",
@@ -46,6 +50,7 @@ __all__ = [
     "TraceEntry",
     "Verdict",
     "build_graph",
+    "build_real_deps",
     "build_stub_deps",
     "build_stub_registry",
     "decide",

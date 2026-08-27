@@ -1,11 +1,9 @@
-"""Tool-path registry, result type, and Phase 4 stub handlers.
+"""Tool-path registry, result type, and test-only stub handlers.
 
-The ``ToolPath`` registry is the seam between the graph and the tool paths. In
-Phase 4 it is populated with deterministic, typed stub handlers — one per route —
-that echo the route and a canned payload. Phase 5 replaces the handlers with the
-real CRM/RAG/direct/web-search tools, and Phase 6 replaces the stub synthesizer
-with the streamed model, by swapping registrations, not by touching the graph.
-These stubs are real implementations behind the same interface, not placeholders.
+The ``ToolPath`` registry is the seam between the graph and the tool paths. Phase
+5 registers the real CRM/RAG/direct/web-search tools; Phase 6 swaps the
+completing synthesizer for the streamed model. Both swaps change registrations,
+not the graph. The stubs remain as deterministic stand-ins for graph-shape tests.
 """
 
 from __future__ import annotations
@@ -14,7 +12,7 @@ from dataclasses import dataclass, field
 from typing import Any, Protocol, runtime_checkable
 
 from sahana_api.graph.schemas import Route
-from sahana_api.graph.state import RequestContext
+from sahana_api.graph.state import RequestContext, StructuredTable
 
 
 class ToolNotRegisteredError(KeyError):
@@ -31,12 +29,30 @@ class ToolRequest:
 
 @dataclass(frozen=True)
 class ToolResult:
-    """The typed output of a tool path, consumed by the synthesizer."""
+    """The typed output of a tool path, consumed by the synthesizer.
+
+    ``payload`` is the context text (or authoritative rendering) the synthesizer
+    grounds on; ``citations`` are the real sources the tool actually retrieved (the
+    synthesizer never invents citations); ``structured`` carries an authoritative
+    table (CRM) the frontend renders verbatim; ``metadata`` carries a ``status``
+    the synthesizer and trace read (e.g. ``grounded``, ``not_found``,
+    ``identify_required``).
+    """
 
     route: Route
     payload: str
     citations: list[str] = field(default_factory=list)
+    structured: StructuredTable | None = None
     metadata: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
+class SynthesisResult:
+    """The synthesizer's typed output: the answer plus what it grounded on."""
+
+    answer: str
+    citations: list[str] = field(default_factory=list)
+    structured: StructuredTable | None = None
 
 
 @runtime_checkable
@@ -51,7 +67,7 @@ class ToolPath(Protocol):
 class Synthesizer(Protocol):
     """Turns a tool result into a final answer. Phase 6 streams the real model."""
 
-    async def synthesize(self, question: str, result: ToolResult) -> str: ...
+    async def synthesize(self, question: str, result: ToolResult) -> SynthesisResult: ...
 
 
 @dataclass(frozen=True)
@@ -87,10 +103,14 @@ class _StubToolPath:
 
 
 class StubSynthesizer:
-    """A deterministic stub synthesizer. Phase 6 replaces it with the streamed model."""
+    """A deterministic stub synthesizer. Phase 5 replaces it with the real model."""
 
-    async def synthesize(self, question: str, result: ToolResult) -> str:
-        return f"[{result.route.value}] {result.payload}"
+    async def synthesize(self, question: str, result: ToolResult) -> SynthesisResult:
+        return SynthesisResult(
+            answer=f"[{result.route.value}] {result.payload}",
+            citations=result.citations,
+            structured=result.structured,
+        )
 
 
 _STUB_PAYLOADS: dict[Route, str] = {
