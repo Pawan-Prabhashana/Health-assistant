@@ -1,9 +1,10 @@
 """FastAPI application factory and process entrypoint.
 
-``create_app`` wires configuration, structured logging, CORS, the readiness
-registry, and the routers together. The lifespan handler owns startup and
-shutdown so the same construction path is used by the ASGI server and the test
-suite.
+``create_app`` wires configuration, structured logging, CORS, the database,
+readiness registry, error handlers, and routers together. The lifespan handler
+owns startup and shutdown so the same construction path is used by the ASGI
+server and the test suite. The application boots even without a database
+configured: liveness stays up and readiness reports Postgres as not-ready.
 """
 
 from __future__ import annotations
@@ -16,9 +17,12 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from sahana_api.config import Settings, get_settings
+from sahana_api.db.engine import Database
+from sahana_api.db.health import make_postgres_check
+from sahana_api.errors import register_exception_handlers
 from sahana_api.logging import configure_logging, get_logger
 from sahana_api.readiness import ReadinessRegistry
-from sahana_api.routers import health_router
+from sahana_api.routers import health_router, patients_router, sessions_router
 from sahana_api.version import __version__
 
 
@@ -31,10 +35,21 @@ class RootResponse(TypedDict):
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
-    """Configure logging on startup and log lifecycle events."""
+    """Configure logging, open the database, and register readiness checks."""
     settings: Settings = app.state.settings
     configure_logging(settings)
     logger = get_logger("sahana_api.lifespan")
+
+    registry: ReadinessRegistry = app.state.readiness
+    database: Database | None = None
+    if settings.database_url is not None:
+        database = Database.from_settings(settings)
+        registry.register(make_postgres_check(database))
+        logger.info("database.configured")
+    else:
+        logger.warning("database.not_configured")
+    app.state.db = database
+
     logger.info(
         "application.startup",
         app_name=settings.app_name,
@@ -44,6 +59,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     try:
         yield
     finally:
+        if database is not None:
+            await database.dispose()
         logger.info("application.shutdown", version=__version__)
 
 
@@ -63,6 +80,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     )
     app.state.settings = resolved
     app.state.readiness = ReadinessRegistry()
+    app.state.db = None
 
     app.add_middleware(
         CORSMiddleware,
@@ -72,7 +90,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         allow_headers=["*"],
     )
 
+    register_exception_handlers(app)
+
     app.include_router(health_router)
+    app.include_router(patients_router)
+    app.include_router(sessions_router)
 
     @app.get("/", summary="Service landing", tags=["meta"])
     async def root() -> RootResponse:
