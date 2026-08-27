@@ -13,9 +13,29 @@ import logging
 import sys
 
 import structlog
-from structlog.types import Processor
+from structlog.types import EventDict, Processor, WrappedLogger
 
 from sahana_api.config import Settings
+
+# Log-event keys whose values are personal data under Sri Lanka's PDPA and must
+# never reach any log sink. Extend via :func:`mark_sensitive`. The convention is
+# to pass PII as structured fields (never interpolated into the message) so this
+# key-based processor can mask it in every environment.
+SENSITIVE_KEYS: set[str] = {"phone", "full_name", "name"}
+_REDACTED = "[redacted]"
+
+
+def mark_sensitive(*keys: str) -> None:
+    """Register additional event keys as sensitive, to be redacted from logs."""
+    SENSITIVE_KEYS.update(keys)
+
+
+def redact_pii(_logger: WrappedLogger, _method_name: str, event_dict: EventDict) -> EventDict:
+    """structlog processor that masks values of :data:`SENSITIVE_KEYS`."""
+    for key in event_dict:
+        if key in SENSITIVE_KEYS and event_dict[key] is not None:
+            event_dict[key] = _REDACTED
+    return event_dict
 
 
 def configure_logging(settings: Settings) -> None:
@@ -30,6 +50,7 @@ def configure_logging(settings: Settings) -> None:
         structlog.contextvars.merge_contextvars,
         structlog.processors.add_log_level,
         structlog.processors.TimeStamper(fmt="iso", utc=True),
+        redact_pii,
         structlog.processors.StackInfoRenderer(),
         structlog.processors.format_exc_info,
     ]
@@ -68,6 +89,7 @@ def _stdlib_formatter(settings: Settings) -> logging.Formatter:
         foreign_pre_chain=[
             structlog.processors.add_log_level,
             structlog.processors.TimeStamper(fmt="iso", utc=True),
+            redact_pii,
         ],
     )
 
