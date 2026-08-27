@@ -5,7 +5,7 @@ API_DIR := apps/api
 WEB_DIR := apps/web
 
 .DEFAULT_GOAL := help
-.PHONY: help install lint format typecheck test up down logs ps clean
+.PHONY: help install lint format typecheck test migrate migrate-down seed up down logs ps clean
 
 help: ## List available targets
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) \
@@ -32,6 +32,15 @@ typecheck: ## Type-check backend (mypy --strict) and frontend (tsc)
 
 test: ## Run the backend test suite
 	cd $(API_DIR) && uv run pytest
+
+migrate: ## Apply database migrations to head (Alembic, direct connection)
+	cd $(API_DIR) && uv run alembic upgrade head
+
+migrate-down: ## Reverse all database migrations (Alembic, direct connection)
+	cd $(API_DIR) && uv run alembic downgrade base
+
+seed: ## Populate idempotent demo data
+	cd $(API_DIR) && uv run python -m sahana_api.seed
 
 up: ## Build and start the container stack in the background
 	docker compose up --build -d
