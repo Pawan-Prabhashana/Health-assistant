@@ -47,11 +47,28 @@ class Settings(BaseSettings):
     api_port: int = 8000
     cors_allow_origins: list[str] = Field(default_factory=lambda: ["http://localhost:8080"])
 
+    # -- Database (Supabase Postgres via SQLAlchemy async + asyncpg) -------
+    # ``database_url`` is the pooled runtime connection (Supabase transaction
+    # pooler / pgbouncer) used by the application; it MUST use the
+    # ``postgresql+asyncpg`` scheme. Because the transaction pooler is
+    # incompatible with server-side prepared statements, the engine is built
+    # with ``statement_cache_size=0`` (see ``db.engine``).
+    #
+    # ``database_migration_url`` is the direct (non-pooled) connection used by
+    # Alembic, because DDL needs a stable session the transaction pooler does not
+    # provide. Both are required in staging/production; when unset the app still
+    # boots (liveness stays up) and readiness reports Postgres as not-ready.
+    database_url: str | None = None
+    database_migration_url: str | None = None
+    db_pool_size: int = 5
+    db_max_overflow: int = 10
+    db_pool_timeout: float = 30.0
+    db_echo: bool = False
+
     # -- Provider configuration (declared now, consumed in later phases) ---
-    # Supabase (Postgres + pgvector) — persistence layer.
+    # Supabase project references (used by later phases; not read here).
     supabase_url: str | None = None
     supabase_service_role_key: str | None = None
-    database_url: str | None = None
     # Qdrant Cloud — vector store.
     qdrant_url: str | None = None
     qdrant_api_key: str | None = None

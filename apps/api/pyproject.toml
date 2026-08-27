@@ -12,6 +12,10 @@ dependencies = [
     "pydantic>=2.11.7,<3",
     "pydantic-settings>=2.10.1,<3",
     "structlog>=25.4.0,<26",
+    "sqlalchemy[asyncio]>=2.0.36,<2.1",
+    "asyncpg>=0.30.0,<0.31",
+    "alembic>=1.16.0,<2",
+    "phonenumbers>=8.13.0,<10",
 ]
 
 [project.optional-dependencies]
@@ -21,6 +25,8 @@ dev = [
     "pytest>=8.4.1,<9",
     "pytest-asyncio>=1.1.0,<2",
     "httpx>=0.28.1,<0.29",
+    "testcontainers>=4.9.0,<5",
+    "psycopg2-binary>=2.9.9,<3",
 ]
 
 [build-system]
@@ -68,8 +74,12 @@ plugins = ["pydantic.mypy"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
 testpaths = ["tests"]
 addopts = "-ra"
+markers = [
+    "pg: tests that require a real Postgres (via testcontainers); skipped when Docker is unavailable.",
+]
 
 [tool.coverage.run]
 branch = true
