@@ -16,10 +16,13 @@ from typing import TypedDict
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from sahana_api.cag.cache import CagCache
 from sahana_api.config import Settings, get_settings
 from sahana_api.db.engine import Database
 from sahana_api.db.health import make_postgres_check
+from sahana_api.embeddings.factory import build_local_embedder
 from sahana_api.errors import register_exception_handlers
+from sahana_api.graph.pipeline import build_graph, build_stub_deps
 from sahana_api.llm.health import make_llm_check
 from sahana_api.llm.registry import ModelRegistry, build_model_registry
 from sahana_api.logging import configure_logging, get_logger
@@ -70,6 +73,21 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.llm = models
     logger.info("llm.configured", mode=settings.llm_mode, roles=sorted(models.configured_roles()))
 
+    # Compile the decision graph once and reuse it. The CAG cache is attached when
+    # a vector store is configured; otherwise the graph runs without a cache.
+    cag_cache: CagCache | None = None
+    if vector is not None:
+        cag_cache = CagCache(
+            vector.client,
+            settings.qdrant_cag_collection,
+            build_local_embedder(settings),
+            similarity_threshold=settings.cag_similarity_threshold,
+            ttl_seconds=settings.cag_ttl_seconds,
+            cacheable_routes=settings.cag_cacheable_routes,
+        )
+    app.state.graph = build_graph(build_stub_deps(settings, models, cag_cache))
+    logger.info("graph.compiled", cag_enabled=cag_cache is not None)
+
     logger.info(
         "application.startup",
         app_name=settings.app_name,
@@ -106,6 +124,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.db = None
     app.state.vector = None
     app.state.llm = None
+    app.state.graph = None
 
     app.add_middleware(
         CORSMiddleware,
