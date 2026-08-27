@@ -29,14 +29,17 @@ FROM python:3.13-slim AS runtime
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     PATH="/app/.venv/bin:$PATH" \
-    HF_HOME=/app/.cache/huggingface
+    HF_HOME=/app/.cache/huggingface \
+    FASTEMBED_CACHE_PATH=/app/.cache/huggingface/fastembed \
+    TIKTOKEN_CACHE_DIR=/app/.cache/huggingface/tiktoken
 
 # Create an unprivileged user to run the service and pre-create the model cache
-# directory so the reserved hf_cache volume (mounted here in later phases for the
-# local MiniLM embedder) inherits writable ownership on first mount.
+# directories so the reserved hf_cache volume (mounted at /app/.cache/huggingface
+# for the local MiniLM embedder and the tokenizer) inherits writable ownership on
+# first mount.
 RUN groupadd --system --gid 1001 sahana \
     && useradd --system --uid 1001 --gid sahana --no-create-home sahana \
-    && mkdir -p /app/.cache/huggingface \
+    && mkdir -p /app/.cache/huggingface/fastembed /app/.cache/huggingface/tiktoken \
     && chown -R sahana:sahana /app/.cache
 
 WORKDIR /app

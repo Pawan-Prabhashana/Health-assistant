@@ -11,6 +11,15 @@ services:
       SAHANA_LOG_LEVEL: ${SAHANA_LOG_LEVEL:-INFO}
       SAHANA_LOG_JSON: ${SAHANA_LOG_JSON:-true}
       SAHANA_CORS_ALLOW_ORIGINS: ${SAHANA_CORS_ALLOW_ORIGINS:-["http://localhost:8080"]}
+      SAHANA_DATABASE_URL: ${SAHANA_DATABASE_URL:-}
+      SAHANA_DATABASE_MIGRATION_URL: ${SAHANA_DATABASE_MIGRATION_URL:-}
+      SAHANA_QDRANT_URL: ${SAHANA_QDRANT_URL:-}
+      SAHANA_QDRANT_API_KEY: ${SAHANA_QDRANT_API_KEY:-}
+      SAHANA_OPENAI_API_KEY: ${SAHANA_OPENAI_API_KEY:-}
+      SAHANA_KB_EMBEDDER: ${SAHANA_KB_EMBEDDER:-openai}
+      # Local embedder + tokenizer caches live under the hf_cache mount so they
+      # download once and persist across restarts.
+      SAHANA_FASTEMBED_CACHE_DIR: /app/.cache/huggingface/fastembed
     volumes:
       - hf_cache:/app/.cache/huggingface
     networks:
@@ -53,6 +62,5 @@ networks:
 
 volumes:
   hf_cache:
-    # Reserved for the local MiniLM sentence-transformer cache used by the
-    # embeddings route in a later phase. Declared now to keep the topology
-    # stable across phases.
+    # Persists the local fastembed MiniLM model and the tiktoken vocabulary so
+    # they download once and survive restarts.
