@@ -11,10 +11,37 @@ from __future__ import annotations
 from functools import lru_cache
 from typing import Literal
 
-from pydantic import Field
+from pydantic import BaseModel, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 AppEnv = Literal["development", "staging", "production"]
+LLMMode = Literal["live", "fake"]
+
+
+class ModelPrice(BaseModel):
+    """Per-1M-token input/output price for a model, in USD.
+
+    Prices drift, so they live in configuration rather than code and are used only
+    to estimate (not bill) cost for observability.
+    """
+
+    input_per_1m: float
+    output_per_1m: float
+
+
+def _default_model_prices() -> dict[str, ModelPrice]:
+    """Current per-1M-token prices for the default and documented-alternate models."""
+    return {
+        # Active defaults.
+        "openai/gpt-oss-20b": ModelPrice(input_per_1m=0.10, output_per_1m=0.50),
+        "openai/gpt-oss-120b": ModelPrice(input_per_1m=0.15, output_per_1m=0.75),
+        "google/gemini-2.5-flash": ModelPrice(input_per_1m=0.30, output_per_1m=2.50),
+        # Documented alternates (see ADR 0009): deprecated Groq Llama classifiers
+        # and the pre-staged forward Gemini default.
+        "llama-3.1-8b-instant": ModelPrice(input_per_1m=0.05, output_per_1m=0.08),
+        "llama-3.3-70b-versatile": ModelPrice(input_per_1m=0.59, output_per_1m=0.79),
+        "google/gemini-3.7-flash": ModelPrice(input_per_1m=0.30, output_per_1m=2.50),
+    }
 
 
 class Settings(BaseSettings):
@@ -95,6 +122,25 @@ class Settings(BaseSettings):
     cag_cacheable_routes: list[str] = Field(
         default_factory=lambda: ["rag", "concierge", "web_search"]
     )
+
+    # -- LLM providers (single OpenAI-compatible transport; see ADR 0009) --
+    # ``llm_mode`` selects the real transport or the deterministic fake. Model IDs,
+    # base URLs, and prices are all config so swaps are config changes, not code.
+    # Guardrail/router run on Groq; synth runs on OpenRouter. Keys are read from
+    # ``groq_api_key``/``openrouter_api_key`` in the provider block below.
+    llm_mode: LLMMode = "live"
+    groq_base_url: str = "https://api.groq.com/openai/v1"
+    openrouter_base_url: str = "https://openrouter.ai/api/v1"
+    guardrail_model: str = "openai/gpt-oss-20b"
+    router_model: str = "openai/gpt-oss-120b"
+    synth_model: str = "google/gemini-2.5-flash"
+    llm_timeout_seconds: float = 30.0
+    llm_max_retries: int = 3
+    llm_structured_repair_attempts: int = 1
+    # OpenRouter attribution headers (HTTP-Referer / X-Title).
+    openrouter_referer: str = "https://github.com/Pawan-Prabhashana/Health-assistant"
+    openrouter_title: str = "Sahana"
+    model_prices: dict[str, ModelPrice] = Field(default_factory=_default_model_prices)
 
     # -- Provider configuration (declared now, consumed in later phases) ---
     # Supabase project references (used by later phases; not read here).
