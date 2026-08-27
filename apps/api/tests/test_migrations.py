@@ -32,7 +32,7 @@ def _table_names(sync_url: str) -> set[str]:
 
 def test_upgrade_then_downgrade_cycle() -> None:
     try:
-        from testcontainers.postgres import PostgresContainer
+        from testcontainers.community.postgres import PostgresContainer
     except ImportError:  # pragma: no cover - import guard
         pytest.skip("testcontainers is not installed")
 

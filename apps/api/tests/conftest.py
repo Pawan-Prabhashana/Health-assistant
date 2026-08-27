@@ -36,8 +36,8 @@ from sahana_api.kb.chunking import TokenChunker
 from sahana_api.main import create_app
 
 if TYPE_CHECKING:
+    from testcontainers.community.postgres import PostgresContainer
     from testcontainers.core.container import DockerContainer
-    from testcontainers.postgres import PostgresContainer
 
 API_ROOT = Path(__file__).resolve().parents[1]
 KB_ROOT = API_ROOT.parents[1] / "data" / "kb"
@@ -99,7 +99,7 @@ def alembic_config(url: str) -> Config:
 def postgres_container() -> Iterator[PostgresContainer]:
     """Start a pgvector Postgres for the test session; skip if Docker is absent."""
     try:
-        from testcontainers.postgres import PostgresContainer
+        from testcontainers.community.postgres import PostgresContainer
     except ImportError:  # pragma: no cover - import guard
         pytest.skip("testcontainers is not installed")
 

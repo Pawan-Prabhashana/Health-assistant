@@ -70,7 +70,7 @@ async def list_sessions(
             return []
     if resolved_id is None:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="a phone or patient_id filter is required",
         )
     threads = await SessionRepository(session).list_for_patient(
