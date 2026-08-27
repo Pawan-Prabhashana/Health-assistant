@@ -20,6 +20,8 @@ from sahana_api.config import Settings, get_settings
 from sahana_api.db.engine import Database
 from sahana_api.db.health import make_postgres_check
 from sahana_api.errors import register_exception_handlers
+from sahana_api.llm.health import make_llm_check
+from sahana_api.llm.registry import ModelRegistry, build_model_registry
 from sahana_api.logging import configure_logging, get_logger
 from sahana_api.readiness import ReadinessRegistry
 from sahana_api.routers import health_router, patients_router, sessions_router
@@ -61,6 +63,13 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         logger.warning("vector_store.not_configured")
     app.state.vector = vector
 
+    # The LLM registry is always built (fake or live) and its readiness check is
+    # always registered; missing live config makes readiness not-ready.
+    models: ModelRegistry = build_model_registry(settings)
+    registry.register(make_llm_check(settings))
+    app.state.llm = models
+    logger.info("llm.configured", mode=settings.llm_mode, roles=sorted(models.configured_roles()))
+
     logger.info(
         "application.startup",
         app_name=settings.app_name,
@@ -74,6 +83,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             await database.dispose()
         if vector is not None:
             await vector.close()
+        await models.aclose()
         logger.info("application.shutdown", version=__version__)
 
 
@@ -95,6 +105,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.readiness = ReadinessRegistry()
     app.state.db = None
     app.state.vector = None
+    app.state.llm = None
 
     app.add_middleware(
         CORSMiddleware,

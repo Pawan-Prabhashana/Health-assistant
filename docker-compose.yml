@@ -17,6 +17,9 @@ services:
       SAHANA_QDRANT_API_KEY: ${SAHANA_QDRANT_API_KEY:-}
       SAHANA_OPENAI_API_KEY: ${SAHANA_OPENAI_API_KEY:-}
       SAHANA_KB_EMBEDDER: ${SAHANA_KB_EMBEDDER:-openai}
+      SAHANA_LLM_MODE: ${SAHANA_LLM_MODE:-live}
+      SAHANA_GROQ_API_KEY: ${SAHANA_GROQ_API_KEY:-}
+      SAHANA_OPENROUTER_API_KEY: ${SAHANA_OPENROUTER_API_KEY:-}
       # Local embedder + tokenizer caches live under the hf_cache mount so they
       # download once and persist across restarts.
       SAHANA_FASTEMBED_CACHE_DIR: /app/.cache/huggingface/fastembed
