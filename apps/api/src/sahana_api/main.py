@@ -23,6 +23,8 @@ from sahana_api.errors import register_exception_handlers
 from sahana_api.logging import configure_logging, get_logger
 from sahana_api.readiness import ReadinessRegistry
 from sahana_api.routers import health_router, patients_router, sessions_router
+from sahana_api.vector.client import VectorStore
+from sahana_api.vector.health import make_qdrant_check
 from sahana_api.version import __version__
 
 
@@ -50,6 +52,15 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         logger.warning("database.not_configured")
     app.state.db = database
 
+    vector: VectorStore | None = None
+    if settings.qdrant_url is not None:
+        vector = VectorStore.from_settings(settings)
+        registry.register(make_qdrant_check(vector.client))
+        logger.info("vector_store.configured")
+    else:
+        logger.warning("vector_store.not_configured")
+    app.state.vector = vector
+
     logger.info(
         "application.startup",
         app_name=settings.app_name,
@@ -61,6 +72,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     finally:
         if database is not None:
             await database.dispose()
+        if vector is not None:
+            await vector.close()
         logger.info("application.shutdown", version=__version__)
 
 
@@ -81,6 +94,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.settings = resolved
     app.state.readiness = ReadinessRegistry()
     app.state.db = None
+    app.state.vector = None
 
     app.add_middleware(
         CORSMiddleware,
