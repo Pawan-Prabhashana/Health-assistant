@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="Sahana%20Logo.png" alt="Sahana" width="180">
+</p>
+
 # Sahana
 
 Sahana is a hospital health assistant. A client sends a question in a single HTTP
