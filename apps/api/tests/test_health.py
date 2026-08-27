@@ -27,9 +27,10 @@ async def test_readiness_ready_path(client: AsyncClient) -> None:
     assert response.status_code == 200
     body = response.json()
     assert body["ready"] is True
-    # No database/vector store configured here; the LLM check runs in fake mode.
+    # No database/vector store configured here; LLM and Tavily run in fake mode.
     assert all(check["ok"] for check in body["checks"])
     assert any(check["name"] == "llm" for check in body["checks"])
+    assert any(check["name"] == "tavily" for check in body["checks"])
 
 
 async def test_readiness_reports_failing_dependency(app: FastAPI, client: AsyncClient) -> None:

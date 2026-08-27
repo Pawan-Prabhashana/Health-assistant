@@ -57,6 +57,7 @@ def settings() -> Settings:
         database_url=None,
         database_migration_url=None,
         llm_mode="fake",
+        tavily_mode="fake",
     )
 
 
@@ -176,6 +177,7 @@ async def pg_client(migrated_url: str, db_session: AsyncSession) -> AsyncIterato
             database_url=migrated_url,
             database_migration_url=migrated_url,
             llm_mode="fake",
+            tavily_mode="fake",
         )
     )
 

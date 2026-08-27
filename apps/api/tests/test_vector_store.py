@@ -46,7 +46,13 @@ async def test_recreate_changes_dimension(
 
 async def test_readiness_reports_qdrant_up(qdrant_url: str) -> None:
     app = create_app(
-        Settings(app_env="development", log_json=False, qdrant_url=qdrant_url, llm_mode="fake")
+        Settings(
+            app_env="development",
+            log_json=False,
+            qdrant_url=qdrant_url,
+            llm_mode="fake",
+            tavily_mode="fake",
+        )
     )
     async with (
         app.router.lifespan_context(app),

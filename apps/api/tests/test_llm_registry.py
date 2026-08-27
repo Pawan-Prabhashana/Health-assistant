@@ -24,6 +24,11 @@ def test_default_model_ids_and_base_urls() -> None:
     assert settings.synth_model == "google/gemini-2.5-flash"
     assert settings.groq_base_url == "https://api.groq.com/openai/v1"
     assert settings.openrouter_base_url == "https://openrouter.ai/api/v1"
+    assert settings.rag_top_k == 4
+    assert settings.crag_grader_role == "guardrail"
+    assert settings.rag_score_gate_openai == 0.2
+    assert settings.rag_score_gate_local == 0.3
+    assert settings.tavily_mode == "live"
 
 
 def test_fake_registry_serves_every_role() -> None:
