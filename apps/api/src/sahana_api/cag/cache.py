@@ -134,6 +134,28 @@ class CagCache:
         )
         return True
 
+    async def record_hit(self, question: str) -> None:
+        """Increment ``hit_count`` on the entry nearest ``question`` (best-effort).
+
+        Called post-gate for a served cache hit; ``peek`` stays non-mutating so the
+        graph never has side effects. Failures are swallowed — this is accounting.
+        """
+        try:
+            await self._ensure_collection()
+            vector = (await self._embedder.embed([question]))[0]
+            response = await self._client.query_points(
+                collection_name=self._collection, query=vector, limit=1, with_payload=True
+            )
+            if not response.points or response.points[0].score < self._threshold:
+                return
+            top = response.points[0]
+            hit_count = int((top.payload or {}).get(_HIT_COUNT, 0)) + 1
+            await self._client.set_payload(
+                collection_name=self._collection, payload={_HIT_COUNT: hit_count}, points=[top.id]
+            )
+        except Exception as exc:  # accounting must never break the response path
+            _logger.warning("cag.record_hit.failed", error=type(exc).__name__)
+
     async def peek(self, question: str) -> CagCandidate | None:
         """Return the nearest cached candidate without gating or mutation.
 
