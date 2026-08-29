@@ -13,13 +13,17 @@ from typing import Any
 
 from sahana_api.cag.cache import CagCache
 from sahana_api.config import Settings
+from sahana_api.graph.context import RequestContext, TraceEntry
 from sahana_api.graph.decide import decide
 from sahana_api.graph.prompts import GUARDRAIL_SYSTEM, ROUTER_SYSTEM
 from sahana_api.graph.schemas import GuardrailVerdict, Route, RouteDecision
-from sahana_api.graph.state import GraphState, TraceEntry
-from sahana_api.graph.tools import Synthesizer, ToolRegistry, ToolRequest
+from sahana_api.graph.state import GraphState
+from sahana_api.graph.tools import ToolRegistry, ToolRequest
 from sahana_api.llm.base import Message
 from sahana_api.llm.registry import ModelRegistry
+from sahana_api.memory.recall import SessionProvider, recall
+from sahana_api.phone import InvalidPhoneNumberError, normalize_phone
+from sahana_api.repositories.patients import PatientRepository
 
 Node = Callable[[GraphState], Awaitable[GraphState]]
 
@@ -139,30 +143,69 @@ def make_cached_answer_node() -> Node:
     return cached_answer_node
 
 
-def make_tool_then_synth_node(
-    tools: ToolRegistry, synth: Synthesizer, fallback_route: Route
-) -> Node:
-    """Invoke the chosen route's tool handler, then synthesize the answer."""
+def make_tool_then_synth_node(tools: ToolRegistry, fallback_route: Route) -> Node:
+    """Run the chosen route's tool with the resolved context; store the result.
+
+    Synthesis (complete or stream) happens in the pipeline layer so the same tool
+    result can be answered synchronously or streamed. The node's name is kept for
+    the reasoning trace.
+    """
 
     async def tool_then_synth_node(state: GraphState) -> GraphState:
         route = state.get("route_taken") or fallback_route
-        handler = tools.get(route)
-        result = await handler.run(ToolRequest(state["question"], state["context"]))
-        synthesis = await synth.synthesize(state["question"], result)
+        base = state["context"]
+        resolved_patient_id = state.get("resolved_patient_id") or base.patient_id
+        context = RequestContext(
+            session_id=base.session_id, patient_id=resolved_patient_id, phone=base.phone
+        )
+        result = await tools.get(route).run(ToolRequest(state["question"], context))
         entry = TraceEntry(
             "tool_then_synth",
             {
                 "route": route.value,
                 "status": str(result.metadata.get("status", "ok")),
-                "citations": len(synthesis.citations),
-                "structured": synthesis.structured is not None,
+                "citations": len(result.citations),
+                "structured": result.structured is not None,
             },
         )
-        return {
-            "answer": synthesis.answer,
-            "citations": synthesis.citations,
-            "structured": synthesis.structured,
-            "trace": [entry],
-        }
+        return {"tool_result": result, "route_taken": route, "trace": [entry]}
 
     return tool_then_synth_node
+
+
+def make_patient_lookup_node(session_provider: SessionProvider) -> Node:
+    """Resolve the caller's phone to a patient id (own-identity only)."""
+
+    async def patient_lookup_node(state: GraphState) -> GraphState:
+        context = state["context"]
+        resolved = context.patient_id
+        if resolved is None and context.phone:
+            try:
+                phone = normalize_phone(context.phone)
+            except InvalidPhoneNumberError:
+                phone = None
+            if phone is not None:
+                async with session_provider() as session:
+                    patient = await PatientRepository(session).get_by_phone(phone)
+                    resolved = patient.id if patient is not None else None
+        entry = TraceEntry("patient_lookup", {"identified": resolved is not None})
+        return {"resolved_patient_id": resolved, "trace": [entry]}
+
+    return patient_lookup_node
+
+
+def make_memory_recall_node(session_provider: SessionProvider, recall_turns: int) -> Node:
+    """Recall the rolling summary plus the last N turns for the session."""
+
+    async def memory_recall_node(state: GraphState) -> GraphState:
+        session_id = state["context"].session_id
+        if session_id is None:
+            return {"memory": None, "trace": [TraceEntry("memory_recall", {"available": False})]}
+        memory = await recall(session_provider, session_id, recall_turns=recall_turns)
+        entry = TraceEntry(
+            "memory_recall",
+            {"turns": len(memory.turns), "has_summary": memory.summary is not None},
+        )
+        return {"memory": memory, "trace": [entry]}
+
+    return memory_recall_node

@@ -73,4 +73,5 @@ def build_real_deps(
         synth=CompletingSynthesizer(_optional_model(models, "synth")),
         cag=cag,
         settings=settings,
+        session_provider=session_provider,
     )

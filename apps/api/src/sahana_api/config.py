@@ -177,6 +177,20 @@ class Settings(BaseSettings):
     tavily_timeout_seconds: float = 10.0
     tavily_max_retries: int = 2
 
+    # -- Chat pipeline and short-term memory (Phase 6); see ADR 0012 ------
+    # Recall builds the synth context as a rolling summary plus the last
+    # ``memory_recall_turns`` raw turns, so context stays bounded on long threads.
+    # ``memory_summary_threshold`` is the turn count past which /chat/summarize is
+    # advised; ``summary_model_role`` is the cheap model that compresses turns.
+    # After a successful synth on a cacheable route the answer is stored to the CAG
+    # cache non-blocking (``cache_store_enabled``). ``sse_keepalive_seconds`` bounds
+    # SSE idle time with heartbeat comments.
+    memory_recall_turns: int = 6
+    memory_summary_threshold: int = 12
+    summary_model_role: Literal["guardrail", "router", "synth"] = "guardrail"
+    cache_store_enabled: bool = True
+    sse_keepalive_seconds: float = 15.0
+
     # -- Provider configuration (declared now, consumed in later phases) ---
     # Supabase project references (used by later phases; not read here).
     supabase_url: str | None = None
