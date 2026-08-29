@@ -24,6 +24,14 @@ class NotFoundError(Exception):
         self.resource = resource
 
 
+class ServiceUnavailableError(Exception):
+    """Raised when a required capability is not configured (surfaced as 503)."""
+
+    def __init__(self, message: str) -> None:
+        super().__init__(message)
+        self.message = message
+
+
 def _envelope(code: str, message: str, fields: list[FieldError] | None = None) -> dict[str, object]:
     """Serialize an error envelope to a JSON-ready dict."""
     detail = ErrorDetail(code=code, message=message, fields=fields or [])
@@ -45,6 +53,13 @@ def register_exception_handlers(app: FastAPI) -> None:
         return JSONResponse(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             content=_envelope("database_unavailable", "database is not configured"),
+        )
+
+    @app.exception_handler(ServiceUnavailableError)
+    async def _service_unavailable(_request: Request, exc: ServiceUnavailableError) -> JSONResponse:
+        return JSONResponse(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            content=_envelope("service_unavailable", exc.message),
         )
 
     @app.exception_handler(RequestValidationError)

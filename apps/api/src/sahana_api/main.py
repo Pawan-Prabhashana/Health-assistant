@@ -29,7 +29,7 @@ from sahana_api.llm.health import make_llm_check
 from sahana_api.llm.registry import ModelRegistry, build_model_registry
 from sahana_api.logging import configure_logging, get_logger
 from sahana_api.readiness import ReadinessRegistry
-from sahana_api.routers import health_router, patients_router, sessions_router
+from sahana_api.routers import chat_router, health_router, patients_router, sessions_router
 from sahana_api.tools.tavily import build_tavily_client, make_tavily_check
 from sahana_api.tools.wiring import build_real_deps
 from sahana_api.vector.client import VectorStore
@@ -103,6 +103,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         except EmbeddingError:
             logger.warning("kb_retriever.not_configured")
     session_provider = None if database is None else database.sessionmaker
+    app.state.cag = cag_cache
     app.state.graph = build_graph(
         build_real_deps(
             settings,
@@ -151,6 +152,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.db = None
     app.state.vector = None
     app.state.llm = None
+    app.state.cag = None
     app.state.graph = None
 
     app.add_middleware(
@@ -166,6 +168,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(health_router)
     app.include_router(patients_router)
     app.include_router(sessions_router)
+    app.include_router(chat_router)
 
     @app.get("/", summary="Service landing", tags=["meta"])
     async def root() -> RootResponse:
