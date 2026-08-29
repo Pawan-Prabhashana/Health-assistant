@@ -58,12 +58,32 @@ in a single outward round-trip.
 | Embeddings       | OpenAI (hosted) and a local MiniLM              |
 | Web search       | Tavily                                          |
 
-## Endpoint surface (planned)
+## Endpoint surface
 
-The finished backend exposes 16 endpoints: 3 health/config, 5 chat, 4 sessions,
-and 4 patients. A courtesy `GET /` landing route sits outside that count. As of
-Phase 1, 11 are live: the 3 health/config, the 4 patients, and the 4 sessions.
-The 5 chat endpoints arrive in a later phase.
+The backend exposes all 16 endpoints: 3 health/config, 4 patients, 4 sessions, and
+5 chat (`POST /chat`, `POST /chat/stream`, `GET /chat/history`,
+`POST /chat/summarize`, `DELETE /chat/memory`). A courtesy `GET /` landing route
+sits outside that count.
+
+## What exists as of Phase 6
+
+Phase 6 makes Sahana a chat system, realizing "outside sync, inside async":
+
+- **Five chat endpoints**: a synchronous `POST /chat` (one round-trip), an SSE
+  `POST /chat/stream` sharing one pipeline, plus history, summarize, and
+  clear-memory. See [ADR 0012](adr/0012-chat-pipeline-and-memory.md).
+- **Five-way fan-out**: two context nodes (`patient_lookup`, `memory_recall`) join
+  the three classifiers on the fan-out, writing distinct keys; `decide` is
+  unchanged.
+- **SSE protocol**: `routing` → `delta*` → `final` for tool-backed answers;
+  `routing` → `final` for refusals and cache hits; `error` for failures. Disconnect
+  persists what was generated (marked incomplete) with no dangling record.
+- **Short-term memory**: recall is a bounded rolling summary plus the last N turns;
+  the summary lives in `sessions` columns added by migration `0002`.
+- **Closed CAG loop**: cacheable answers are stored non-blocking; identical FAQs
+  hit the cache; CRM is never stored; the served-hit counter increments post-gate.
+- **Synth usage on the stream** is captured from the terminal chunk
+  (`include_usage`); total per-request latency is instrumented and returned.
 
 ## What exists as of Phase 5
 

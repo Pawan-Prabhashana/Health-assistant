@@ -32,6 +32,11 @@ uv sync --extra dev
 | GET    | `/sessions`                | List threads for a patient (`phone` or `patient_id`). |
 | GET    | `/sessions/{id}`           | Fetch a thread (`?include=messages`).                 |
 | DELETE | `/sessions/{id}`           | Delete a thread and cascade its messages.             |
+| POST   | `/chat`                    | One synchronous chat turn (answer, route, table, usage, trace). |
+| POST   | `/chat/stream`             | The same turn streamed over SSE (`routing`/`delta`/`final`/`error`). |
+| GET    | `/chat/history`            | Paginated message history for a session.              |
+| POST   | `/chat/summarize`          | Refresh a session's rolling short-term summary.       |
+| DELETE | `/chat/memory`             | Clear a session's messages and summary.               |
 
 `/health/ready` returns `503` when any registered dependency check fails (e.g.
 Postgres unreachable), while `/health/live` stays `200` so the container is still
@@ -101,7 +106,9 @@ src/sahana_api/
   llm/               # ChatModel abstraction, provider client, retry, fake, registry
   graph/             # LangGraph decision graph: state, nodes, decide, tools, pipeline
   tools/             # CRM, RAG/CRAG, direct, Tavily/web, synthesizer, prompt module
-  routers/           # health, patients, sessions
+  memory/            # short-term memory: recall, summarize, types
+  chat/              # chat orchestration: persistence, CAG loop, SSE streaming
+  routers/           # health, patients, sessions, chat
   schemas/           # Pydantic request/response models
 alembic/             # migration environment and versions
 tests/

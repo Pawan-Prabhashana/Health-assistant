@@ -13,10 +13,12 @@ Two families of fixtures live here:
 
 from __future__ import annotations
 
+import asyncio
 import time
 import urllib.request
 import uuid
-from collections.abc import AsyncIterator, Iterator
+from collections.abc import AsyncIterator, Callable, Iterator
+from contextlib import AbstractAsyncContextManager, asynccontextmanager
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -29,11 +31,17 @@ from qdrant_client import AsyncQdrantClient
 from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine, AsyncSession, create_async_engine
 from sqlalchemy.pool import NullPool
 
+from sahana_api.cag.cache import CagCache
 from sahana_api.config import Settings
 from sahana_api.db.session import get_session
 from sahana_api.embeddings.local import LocalEmbedder
+from sahana_api.graph.pipeline import build_graph
 from sahana_api.kb.chunking import TokenChunker
+from sahana_api.llm.registry import ModelRegistry
 from sahana_api.main import create_app
+from sahana_api.tools.rag import Retriever
+from sahana_api.tools.tavily import FakeTavilyClient
+from sahana_api.tools.wiring import build_real_deps
 
 if TYPE_CHECKING:
     from testcontainers.community.postgres import PostgresContainer
@@ -270,3 +278,84 @@ def token_chunker() -> TokenChunker:
         return TokenChunker(chunk_tokens=256, overlap=32)
     except Exception as exc:  # tiktoken vocabulary unavailable offline
         pytest.skip(f"tiktoken unavailable: {type(exc).__name__}")
+
+
+# ---------------------------------------------------------------------------
+# Chat pipeline fixtures (a DB-backed chat app bound to the isolated test session)
+# ---------------------------------------------------------------------------
+class _LockedSession:
+    """Yields the shared test session under a lock so concurrent graph nodes do not
+    overlap operations on a single ``AsyncSession`` (production uses one session per
+    node from the sessionmaker, so this lock is test-only)."""
+
+    def __init__(self, session: AsyncSession, lock: asyncio.Lock) -> None:
+        self._session = session
+        self._lock = lock
+
+    async def __aenter__(self) -> AsyncSession:
+        await self._lock.acquire()
+        return self._session
+
+    async def __aexit__(self, *exc: object) -> bool:
+        self._lock.release()
+        return False
+
+
+class _SessionProviderDatabase:
+    """A stand-in for ``Database`` exposing a ``sessionmaker`` over the test session."""
+
+    def __init__(self, provider: Callable[[], _LockedSession]) -> None:
+        self.sessionmaker = provider
+
+
+ChatClientFactory = Callable[..., AbstractAsyncContextManager[AsyncClient]]
+
+
+@pytest.fixture
+def session_provider(db_session: AsyncSession) -> Callable[[], _LockedSession]:
+    """A serialized session provider over the transaction-isolated test session."""
+    lock = asyncio.Lock()
+    return lambda: _LockedSession(db_session, lock)
+
+
+@pytest.fixture
+def build_chat_client(
+    db_session: AsyncSession, session_provider: Callable[[], _LockedSession]
+) -> ChatClientFactory:
+    """Return a factory building a chat-ready app bound to the test session.
+
+    Usage: ``async with build_chat_client(models, cag=..., retriever=...) as client:``
+    """
+
+    @asynccontextmanager
+    async def factory(
+        models: ModelRegistry,
+        *,
+        cag: CagCache | None = None,
+        retriever: Retriever | None = None,
+    ) -> AsyncIterator[AsyncClient]:
+        settings = Settings(llm_mode="fake", tavily_mode="fake", kb_embedder="local")
+        deps = build_real_deps(
+            settings,
+            models,
+            cag,
+            session_provider=session_provider,
+            retriever=retriever,
+            tavily=FakeTavilyClient(),
+        )
+        app = create_app(settings)
+        app.state.llm = models
+        app.state.cag = cag
+        app.state.db = _SessionProviderDatabase(session_provider)
+        app.state.graph = build_graph(deps)
+
+        async def _override() -> AsyncIterator[AsyncSession]:
+            yield db_session
+
+        app.dependency_overrides[get_session] = _override
+        async with AsyncClient(
+            transport=ASGITransport(app=app), base_url="http://testserver"
+        ) as client:
+            yield client
+
+    return factory

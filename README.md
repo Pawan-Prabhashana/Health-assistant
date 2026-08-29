@@ -11,16 +11,16 @@ search, or a templated refusal), with a cache short-circuiting repeat FAQs. The
 architecture principle is *outside sync, inside async*: the client sees one clean
 round-trip while the handler fans out concurrent work internally.
 
-This repository is built in ten phases. Phases 0–4 delivered the foundation, the
+This repository is built in ten phases. Phases 0–5 delivered the foundation, the
 Supabase data layer with phone-based identity, the vector layer (Qdrant, dual
-embedders, KB ingestion, retriever, route-gated CAG cache), the LLM provider
-layer (`ChatModel` roles, structured output, streaming, fake mode), and the
-decision graph. **Phase 5 puts real answers on the four proceed routes**: an
-identity-gated CRM table, RAG with CRAG grading and a corrective web fallback, a
-direct concierge reply, and Tavily-grounded web search, plus a non-streaming
-synthesizer whose prompts carry a medical-safety posture. Streaming and the chat
-endpoints arrive in Phase 6. See [`docs/architecture.md`](docs/architecture.md)
-for the full target design and what exists today, and
+embedders, KB ingestion, retriever, route-gated CAG cache), the LLM provider layer
+(`ChatModel` roles, structured output, streaming, fake mode), the decision graph,
+and the four real tool paths plus the synthesizer. **Phase 6 makes it a chat
+system**: five chat endpoints, SSE streaming of the synthesizer, the five-way
+async fan-out, short-term memory (rolling summary plus recent turns), message
+persistence, and a closed CAG cache loop — the realization of *outside sync,
+inside async*. All 16 endpoints are live. See
+[`docs/architecture.md`](docs/architecture.md) for the full design and
 [`docs/data-handling.md`](docs/data-handling.md) for the PII posture.
 
 ## Topology
