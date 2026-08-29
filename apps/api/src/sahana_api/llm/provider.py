@@ -24,8 +24,11 @@ from sahana_api.llm.base import (
     LLMResponseError,
     Message,
     Role,
+    StreamCompleted,
+    StreamEvent,
     StructuredCompletion,
     StructuredParseError,
+    TextDelta,
     Usage,
 )
 from sahana_api.llm.retry import RetryPolicy, run_with_policy
@@ -217,14 +220,14 @@ class ProviderClient(ChatModel):
             f"{self._role} structured output failed after {self._repair_attempts} repair attempt(s)"
         ) from last_error
 
-    async def stream(
+    async def stream_events(
         self,
         messages: Sequence[Message],
         *,
         temperature: float = 0.2,
         max_tokens: int | None = None,
-    ) -> AsyncIterator[str]:
-        """Yield text deltas. Streams are not retried (a partial stream is unsafe to replay)."""
+    ) -> AsyncIterator[StreamEvent]:
+        """Yield deltas then usage. Streams are not retried (a partial stream is unsafe)."""
         started = perf_counter()
         stream = await self._client.chat.completions.create(
             model=self._model,
@@ -232,21 +235,37 @@ class ProviderClient(ChatModel):
             temperature=temperature,
             max_tokens=max_tokens if max_tokens is not None else omit,
             stream=True,
+            stream_options={"include_usage": True},
             extra_headers=self._extra_headers,
         )
+        raw_usage = None
         deltas = 0
         async for chunk in stream:
+            if chunk.usage is not None:
+                raw_usage = chunk.usage
             if not chunk.choices:
                 continue
             delta = chunk.choices[0].delta.content
             if delta:
                 deltas += 1
-                yield delta
-        _logger.info(
-            f"llm.{self._role}.stream.completed",
-            latency_ms=round((perf_counter() - started) * 1000, 1),
-            deltas=deltas,
-        )
+                yield TextDelta(delta)
+
+        latency_ms = round((perf_counter() - started) * 1000, 1)
+        usage: Usage | None = None
+        if raw_usage is not None:
+            usage = Usage(
+                prompt_tokens=raw_usage.prompt_tokens,
+                completion_tokens=raw_usage.completion_tokens,
+                total_tokens=raw_usage.total_tokens,
+                estimated_cost_usd=estimate_cost(
+                    self._prices, self._model, raw_usage.prompt_tokens, raw_usage.completion_tokens
+                ),
+                latency_ms=latency_ms,
+            )
+            log_usage(self._role, self._model, usage)
+        else:
+            _logger.info(f"llm.{self._role}.stream.completed", latency_ms=latency_ms, deltas=deltas)
+        yield StreamCompleted(usage=usage)
 
     async def aclose(self) -> None:
         """Close the underlying HTTP client."""

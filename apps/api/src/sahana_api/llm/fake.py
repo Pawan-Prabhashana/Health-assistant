@@ -18,7 +18,10 @@ from sahana_api.llm.base import (
     LLMResponseError,
     Message,
     Role,
+    StreamCompleted,
+    StreamEvent,
     StructuredCompletion,
+    TextDelta,
     Usage,
 )
 from sahana_api.llm.usage import log_usage
@@ -112,13 +115,17 @@ class FakeChatModel(ChatModel):
         log_usage(self._role, self._model, usage)
         return StructuredCompletion(value=value, raw_text=raw_text, model=self._model, usage=usage)
 
-    async def stream(
+    async def stream_events(
         self,
         messages: Sequence[Message],
         *,
         temperature: float = 0.2,
         max_tokens: int | None = None,
-    ) -> AsyncIterator[str]:
+    ) -> AsyncIterator[StreamEvent]:
         self._maybe_fail()
         for token in self._stream_tokens:
-            yield token
+            yield TextDelta(token)
+        prompt_tokens = _rough_tokens("".join(message.content for message in messages))
+        yield StreamCompleted(
+            usage=self._usage(prompt_tokens, _rough_tokens("".join(self._stream_tokens)))
+        )

@@ -11,8 +11,11 @@ from sahana_api.llm.base import (
     Message,
     ProviderNotConfiguredError,
     Role,
+    StreamCompleted,
+    StreamEvent,
     StructuredCompletion,
     StructuredParseError,
+    TextDelta,
     Usage,
 )
 from sahana_api.llm.fake import FakeChatModel
@@ -35,8 +38,11 @@ __all__ = [
     "ProviderNotConfiguredError",
     "RetryPolicy",
     "Role",
+    "StreamCompleted",
+    "StreamEvent",
     "StructuredCompletion",
     "StructuredParseError",
+    "TextDelta",
     "Usage",
     "build_model_registry",
     "estimate_cost",

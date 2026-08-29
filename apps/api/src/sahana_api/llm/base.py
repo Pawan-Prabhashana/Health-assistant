@@ -77,6 +77,23 @@ class StructuredCompletion[T: BaseModel]:
     usage: Usage
 
 
+@dataclass(frozen=True)
+class TextDelta:
+    """An incremental text chunk from a streaming completion."""
+
+    text: str
+
+
+@dataclass(frozen=True)
+class StreamCompleted:
+    """The terminal event of a stream, carrying usage when the provider reports it."""
+
+    usage: Usage | None
+
+
+type StreamEvent = TextDelta | StreamCompleted
+
+
 class ChatModel(ABC):
     """Transport-agnostic chat model for one configured (provider, model) pair."""
 
@@ -107,11 +124,25 @@ class ChatModel(ABC):
         """Return a response validated into ``schema``, repairing malformed JSON once."""
 
     @abstractmethod
-    def stream(
+    def stream_events(
+        self,
+        messages: Sequence[Message],
+        *,
+        temperature: float = 0.2,
+        max_tokens: int | None = None,
+    ) -> AsyncIterator[StreamEvent]:
+        """Yield text deltas then a terminal :class:`StreamCompleted` carrying usage."""
+
+    async def stream(
         self,
         messages: Sequence[Message],
         *,
         temperature: float = 0.2,
         max_tokens: int | None = None,
     ) -> AsyncIterator[str]:
-        """Yield text deltas for ``messages`` (provider-agnostic)."""
+        """Yield text deltas for ``messages`` (provider-agnostic), dropping usage."""
+        async for event in self.stream_events(
+            messages, temperature=temperature, max_tokens=max_tokens
+        ):
+            if isinstance(event, TextDelta):
+                yield event.text
