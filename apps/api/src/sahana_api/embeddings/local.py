@@ -51,18 +51,26 @@ class LocalEmbedder(Embedder):
     def dimension(self) -> int:
         return self._dimension
 
-    def _ensure_model(self) -> TextEmbedding:
-        """Instantiate the fastembed model on first use (downloads once, cached)."""
+    async def _load_model(self) -> TextEmbedding:
+        """Instantiate the fastembed model on first use (downloads once, cached).
+
+        The one-time cold-start download runs untimed: it is not per-inference
+        latency, so bounding it by the embed timeout would spuriously fail on a
+        cold cache. Only the actual embedding call below is timed and retried.
+        """
         if self._model is None:
-            self._model = TextEmbedding(model_name=self._model_name, cache_dir=self._cache_dir)
+            self._model = await asyncio.to_thread(
+                lambda: TextEmbedding(model_name=self._model_name, cache_dir=self._cache_dir)
+            )
         return self._model
 
     async def embed(self, texts: list[str]) -> list[list[float]]:
         if not texts:
             return []
 
+        model = await self._load_model()
+
         def _run() -> list[list[float]]:
-            model = self._ensure_model()
             return [vector.tolist() for vector in model.embed(texts)]
 
         return await run_with_retries(
