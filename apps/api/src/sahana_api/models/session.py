@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
+import datetime
 import uuid
 from typing import TYPE_CHECKING
 
-from sqlalchemy import ForeignKey, Index, Text
+from sqlalchemy import DateTime, ForeignKey, Index, Text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -38,6 +39,11 @@ class Session(TimestampMixin, Base):
         nullable=True,
     )
     title: Mapped[str] = mapped_column(Text, nullable=False, default=DEFAULT_SESSION_TITLE)
+    # Rolling short-term memory summary; refreshed by /chat/summarize (Phase 6).
+    summary: Mapped[str | None] = mapped_column(Text, nullable=True)
+    summary_updated_at: Mapped[datetime.datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
 
     patient: Mapped[Patient | None] = relationship(back_populates="sessions")
     messages: Mapped[list[Message]] = relationship(

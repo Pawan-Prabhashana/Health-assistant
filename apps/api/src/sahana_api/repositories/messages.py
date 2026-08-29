@@ -6,7 +6,7 @@ import uuid
 from collections.abc import Sequence
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from sahana_api.models.enums import MessageRole
@@ -37,11 +37,36 @@ class MessageRepository:
         await self._session.flush()
         return message
 
-    async def list_for_session(self, session_id: uuid.UUID) -> Sequence[Message]:
-        """Return a session's messages in chronological order."""
-        result = await self._session.execute(
+    async def list_for_session(
+        self, session_id: uuid.UUID, *, limit: int | None = None, offset: int = 0
+    ) -> Sequence[Message]:
+        """Return a session's messages in chronological order, optionally paginated."""
+        query = (
             select(Message)
             .where(Message.session_id == session_id)
             .order_by(Message.created_at.asc())
+            .offset(offset)
         )
+        if limit is not None:
+            query = query.limit(limit)
+        result = await self._session.execute(query)
         return result.scalars().all()
+
+    async def recent(self, session_id: uuid.UUID, limit: int) -> list[Message]:
+        """Return the most recent ``limit`` messages in chronological order."""
+        if limit <= 0:
+            return []
+        result = await self._session.execute(
+            select(Message)
+            .where(Message.session_id == session_id)
+            .order_by(Message.created_at.desc())
+            .limit(limit)
+        )
+        return list(reversed(result.scalars().all()))
+
+    async def count_for_session(self, session_id: uuid.UUID) -> int:
+        """Return the number of messages in a session."""
+        result = await self._session.execute(
+            select(func.count()).select_from(Message).where(Message.session_id == session_id)
+        )
+        return int(result.scalar_one())

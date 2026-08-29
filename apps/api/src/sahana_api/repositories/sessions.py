@@ -2,13 +2,15 @@
 
 from __future__ import annotations
 
+import datetime
 import uuid
 from collections.abc import Sequence
 
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from sahana_api.models.message import Message
 from sahana_api.models.session import DEFAULT_SESSION_TITLE, Session
 
 
@@ -55,5 +57,28 @@ class SessionRepository:
         if thread is None:
             return False
         await self._session.delete(thread)
+        await self._session.flush()
+        return True
+
+    async def set_summary(self, session_id: uuid.UUID, summary: str) -> None:
+        """Store the rolling short-term-memory summary for a session."""
+        thread = await self.get_by_id(session_id)
+        if thread is None:
+            return
+        thread.summary = summary
+        thread.summary_updated_at = datetime.datetime.now(datetime.UTC)
+        await self._session.flush()
+
+    async def clear_memory(self, session_id: uuid.UUID) -> bool:
+        """Delete a session's messages and summary, keeping the session record.
+
+        Returns whether the session exists.
+        """
+        thread = await self.get_by_id(session_id)
+        if thread is None:
+            return False
+        await self._session.execute(delete(Message).where(Message.session_id == session_id))
+        thread.summary = None
+        thread.summary_updated_at = None
         await self._session.flush()
         return True
