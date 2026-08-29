@@ -8,11 +8,13 @@ not the graph. The stubs remain as deterministic stand-ins for graph-shape tests
 
 from __future__ import annotations
 
+from collections.abc import AsyncIterator, Sequence
 from dataclasses import dataclass, field
 from typing import Any, Protocol, runtime_checkable
 
+from sahana_api.graph.context import RequestContext, StructuredTable
 from sahana_api.graph.schemas import Route
-from sahana_api.graph.state import RequestContext, StructuredTable
+from sahana_api.llm.base import Message, Usage
 
 
 class ToolNotRegisteredError(KeyError):
@@ -53,6 +55,14 @@ class SynthesisResult:
     answer: str
     citations: list[str] = field(default_factory=list)
     structured: StructuredTable | None = None
+    usage: Usage | None = None
+
+
+@dataclass(frozen=True)
+class SynthStreamEnd:
+    """Terminal item of a synth stream, carrying the completed result."""
+
+    result: SynthesisResult
 
 
 @runtime_checkable
@@ -65,9 +75,23 @@ class ToolPath(Protocol):
 
 
 class Synthesizer(Protocol):
-    """Turns a tool result into a final answer. Phase 6 streams the real model."""
+    """Turns a tool result into a final answer, optionally with recalled history."""
 
-    async def synthesize(self, question: str, result: ToolResult) -> SynthesisResult: ...
+    async def synthesize(
+        self,
+        question: str,
+        result: ToolResult,
+        *,
+        history: Sequence[Message] | None = None,
+    ) -> SynthesisResult: ...
+
+    def stream(
+        self,
+        question: str,
+        result: ToolResult,
+        *,
+        history: Sequence[Message] | None = None,
+    ) -> AsyncIterator[str | SynthStreamEnd]: ...
 
 
 @dataclass(frozen=True)
@@ -105,12 +129,27 @@ class _StubToolPath:
 class StubSynthesizer:
     """A deterministic stub synthesizer. Phase 5 replaces it with the real model."""
 
-    async def synthesize(self, question: str, result: ToolResult) -> SynthesisResult:
+    async def synthesize(
+        self,
+        question: str,
+        result: ToolResult,
+        *,
+        history: Sequence[Message] | None = None,
+    ) -> SynthesisResult:
         return SynthesisResult(
             answer=f"[{result.route.value}] {result.payload}",
             citations=result.citations,
             structured=result.structured,
         )
+
+    async def stream(
+        self,
+        question: str,
+        result: ToolResult,
+        *,
+        history: Sequence[Message] | None = None,
+    ) -> AsyncIterator[str | SynthStreamEnd]:
+        yield SynthStreamEnd(await self.synthesize(question, result, history=history))
 
 
 _STUB_PAYLOADS: dict[Route, str] = {

@@ -1,17 +1,21 @@
-"""Non-streaming synthesizer: ``complete`` today, ``stream`` in Phase 6.
+"""Synthesizer: ``complete`` (sync) and ``stream`` (SSE) over the synth model.
 
 Route-appropriate system prompts live in :mod:`sahana_api.tools.prompts`. Citations
-and the CRM table are taken from the tool result — the model never invents
-sources, and CRM figures that the model drops or alters are replaced by the
-authoritative payload.
+and the CRM table come from the tool result — the model never invents sources, and
+CRM figures the model drops or alters are replaced by the authoritative payload.
+Recalled short-term memory (``history``) is prepended to ground the reply in the
+conversation. The stream yields text deltas then a :class:`SynthStreamEnd` carrying
+the final result (answer, citations, structured payload, and captured usage).
 """
 
 from __future__ import annotations
 
+from collections.abc import AsyncIterator, Sequence
+
+from sahana_api.graph.context import StructuredTable
 from sahana_api.graph.schemas import Route
-from sahana_api.graph.state import StructuredTable
-from sahana_api.graph.tools import SynthesisResult, ToolResult
-from sahana_api.llm.base import ChatModel, Message
+from sahana_api.graph.tools import SynthesisResult, SynthStreamEnd, ToolResult
+from sahana_api.llm.base import ChatModel, Message, TextDelta
 from sahana_api.logging import get_logger
 from sahana_api.tools.prompts import (
     CONCIERGE_SYSTEM,
@@ -41,27 +45,54 @@ def _figures_intact(table: StructuredTable, answer: str) -> bool:
     return all(cell in answer for row in table.rows for cell in row)
 
 
+def _user_message(question: str, result: ToolResult) -> str:
+    if result.route is Route.DIRECT:
+        return question
+    if result.route is Route.CRM:
+        return (
+            f"The user's message:\n{question}\n\n"
+            f"Authoritative patient record (copy every figure verbatim):\n{result.payload}"
+        )
+    return (
+        f"Question:\n{question}\n\nContext (cite only the sources labelled here):\n{result.payload}"
+    )
+
+
+def _is_passthrough(result: ToolResult) -> bool:
+    return str(result.metadata.get("status", "")) in _PASSTHROUGH_STATUSES
+
+
 class CompletingSynthesizer:
-    """Synthesizer that calls ``ChatModel.complete``. Phase 6 swaps this for streaming."""
+    """Synthesizer over ``ChatModel``: ``synthesize`` (complete) and ``stream``."""
 
     def __init__(self, model: ChatModel | None) -> None:
         self._model = model
 
-    async def synthesize(self, question: str, result: ToolResult) -> SynthesisResult:
-        status = str(result.metadata.get("status", ""))
-        if status in _PASSTHROUGH_STATUSES or self._model is None:
+    def _messages(
+        self, question: str, result: ToolResult, history: Sequence[Message] | None
+    ) -> list[Message]:
+        system = prompt_for(result.route, str(result.metadata.get("status", "")))
+        return [
+            Message("system", system),
+            *(history or []),
+            Message("user", _user_message(question, result)),
+        ]
+
+    async def synthesize(
+        self,
+        question: str,
+        result: ToolResult,
+        *,
+        history: Sequence[Message] | None = None,
+    ) -> SynthesisResult:
+        if _is_passthrough(result) or self._model is None:
             answer = result.payload if result.payload else NOT_FOUND_MESSAGE
             return SynthesisResult(
-                answer=answer,
-                citations=list(result.citations),
-                structured=result.structured,
+                answer=answer, citations=list(result.citations), structured=result.structured
             )
 
-        system = prompt_for(result.route, status)
-        user = _user_message(question, result)
-        completion = await self._model.complete([Message("system", system), Message("user", user)])
+        completion = await self._model.complete(self._messages(question, result, history))
         answer = completion.text.strip()
-
         if (
             result.route is Route.CRM
             and result.structured is not None
@@ -74,17 +105,39 @@ class CompletingSynthesizer:
             answer=answer,
             citations=list(result.citations),
             structured=result.structured,
+            usage=completion.usage,
         )
 
+    async def stream(
+        self,
+        question: str,
+        result: ToolResult,
+        *,
+        history: Sequence[Message] | None = None,
+    ) -> AsyncIterator[str | SynthStreamEnd]:
+        """Yield text deltas then a :class:`SynthStreamEnd`.
 
-def _user_message(question: str, result: ToolResult) -> str:
-    if result.route is Route.DIRECT:
-        return question
-    if result.route is Route.CRM:
-        return (
-            f"The user's message:\n{question}\n\n"
-            f"Authoritative patient record (copy every figure verbatim):\n{result.payload}"
+        Pass-through statuses and the CRM path do not stream token-by-token: they
+        emit a single terminal event with the deterministic/verified answer.
+        """
+        if _is_passthrough(result) or result.route is Route.CRM or self._model is None:
+            yield SynthStreamEnd(await self.synthesize(question, result, history=history))
+            return
+
+        pieces: list[str] = []
+        usage = None
+        async for event in self._model.stream_events(self._messages(question, result, history)):
+            if isinstance(event, TextDelta):
+                pieces.append(event.text)
+                yield event.text
+            else:
+                usage = event.usage
+
+        yield SynthStreamEnd(
+            SynthesisResult(
+                answer="".join(pieces).strip(),
+                citations=list(result.citations),
+                structured=result.structured,
+                usage=usage,
+            )
         )
-    return (
-        f"Question:\n{question}\n\nContext (cite only the sources labelled here):\n{result.payload}"
-    )
