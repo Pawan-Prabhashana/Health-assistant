@@ -1,0 +1,149 @@
+.view {
+  height: 100%;
+  overflow-y: auto;
+  padding: var(--space-6) var(--space-5);
+}
+
+.inner {
+  max-width: 44rem;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.title {
+  font-size: var(--text-2xl);
+  font-weight: 700;
+}
+
+.lede {
+  color: var(--color-ink-muted);
+  margin-bottom: var(--space-2);
+}
+
+.card {
+  padding: var(--space-5);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+}
+
+.cardTitle {
+  font-size: var(--text-sm);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--color-ink-subtle);
+  margin-bottom: var(--space-3);
+}
+
+.badges {
+  display: flex;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.badge {
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--radius-full);
+  font-weight: 600;
+  font-size: var(--text-sm);
+  border: 1px solid var(--color-border);
+}
+
+.badge[data-tone='ok'] {
+  color: var(--color-ok);
+  background: var(--color-ok-soft);
+  border-color: transparent;
+}
+
+.badge[data-tone='fail'] {
+  color: var(--color-danger);
+  background: var(--color-danger-soft);
+  border-color: transparent;
+}
+
+.muted {
+  color: var(--color-ink-muted);
+  font-size: var(--text-sm);
+}
+
+.checks {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: var(--space-2);
+}
+
+.check {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+}
+
+.checkName {
+  font-weight: 600;
+  min-width: 6rem;
+}
+
+.check[data-ok='true'] .checkState {
+  color: var(--color-ok);
+}
+
+.check[data-ok='false'] .checkState {
+  color: var(--color-danger);
+}
+
+.checkDetail {
+  color: var(--color-ink-subtle);
+  font-size: var(--text-sm);
+}
+
+.config {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+}
+
+.config div {
+  display: flex;
+  justify-content: space-between;
+  font-size: var(--text-sm);
+}
+
+.config dt {
+  color: var(--color-ink-subtle);
+}
+
+.config dd {
+  margin: 0;
+  font-weight: 600;
+}
+
+.features {
+  list-style: none;
+  padding: var(--space-3) 0 0;
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.features li {
+  padding: 0.1rem var(--space-2);
+  border-radius: var(--radius-full);
+  font-size: var(--text-xs);
+  background: var(--color-surface-muted);
+  color: var(--color-ink-muted);
+}
+
+.features li[data-on='true'] {
+  background: var(--color-ok-soft);
+  color: var(--color-ok);
+}
