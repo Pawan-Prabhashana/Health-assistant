@@ -1,0 +1,58 @@
+.wrap {
+  margin-top: var(--space-3);
+  overflow-x: auto;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--text-sm);
+}
+
+.table th,
+.table td {
+  padding: var(--space-3);
+  text-align: left;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.table thead th {
+  background: var(--color-surface-muted);
+  color: var(--color-ink-muted);
+  font-weight: 600;
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.status {
+  display: inline-block;
+  padding: 0.1rem var(--space-2);
+  border-radius: var(--radius-full);
+  font-weight: 600;
+  text-transform: capitalize;
+  background: var(--color-surface-muted);
+}
+
+td[data-status='stable'] .status,
+td[data-status='discharged'] .status {
+  color: var(--color-ok);
+  background: var(--color-ok-soft);
+}
+
+td[data-status='admitted'] .status {
+  color: var(--color-warn);
+  background: var(--color-warn-soft);
+}
+
+td[data-status='critical'] .status {
+  color: var(--color-danger);
+  background: var(--color-danger-soft);
+}
