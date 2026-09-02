@@ -14,11 +14,14 @@ COPY src ./src
 COPY public ./public
 RUN npm run build
 
-# ---- Runtime stage: nginx serving the built SPA ----
-FROM nginx:alpine AS runtime
+# ---- Runtime stage: unprivileged nginx serving the built SPA ----
+# The nginx-unprivileged image runs as a non-root user (uid 101) and listens on
+# 8080 by default, so there is no build tooling and no root in the final image.
+FROM nginxinc/nginx-unprivileged:1.27-alpine AS runtime
 
-# Replace the default site with our SPA + reverse-proxy configuration.
+# Replace the default site and install the security-headers snippet it includes.
 COPY nginx.conf /etc/nginx/conf.d/default.conf
+COPY security-headers.conf /etc/nginx/snippets/security-headers.conf
 COPY --from=builder /app/dist /usr/share/nginx/html
 
 EXPOSE 8080
