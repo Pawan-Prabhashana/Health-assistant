@@ -108,7 +108,15 @@ async def chat_stream(payload: ChatRequest, request: Request) -> StreamingRespon
         message=payload.message,
         context=context,
     )
-    return StreamingResponse(stream, media_type="text/event-stream")
+    return StreamingResponse(
+        stream,
+        media_type="text/event-stream",
+        # Disable proxy buffering end to end: nginx honours ``X-Accel-Buffering:
+        # no`` to flush SSE frames as they are produced rather than at stream end,
+        # and ``Cache-Control: no-cache`` keeps intermediaries from caching the
+        # event stream. See ADR 0014.
+        headers={"X-Accel-Buffering": "no", "Cache-Control": "no-cache"},
+    )
 
 
 @router.get(
