@@ -6,27 +6,22 @@ services:
       context: ./apps/api
     image: sahana-api:latest
     restart: unless-stopped
+    # Every backend variable is read from .env (copy .env.docker.example first).
+    # The fastembed cache dir is fixed to the mounted volume path here so it can
+    # never be misconfigured from the environment file.
+    env_file:
+      - .env
     environment:
-      SAHANA_APP_ENV: ${SAHANA_APP_ENV:-production}
-      SAHANA_LOG_LEVEL: ${SAHANA_LOG_LEVEL:-INFO}
-      SAHANA_LOG_JSON: ${SAHANA_LOG_JSON:-true}
-      SAHANA_CORS_ALLOW_ORIGINS: ${SAHANA_CORS_ALLOW_ORIGINS:-["http://localhost:8080"]}
-      SAHANA_DATABASE_URL: ${SAHANA_DATABASE_URL:-}
-      SAHANA_DATABASE_MIGRATION_URL: ${SAHANA_DATABASE_MIGRATION_URL:-}
-      SAHANA_QDRANT_URL: ${SAHANA_QDRANT_URL:-}
-      SAHANA_QDRANT_API_KEY: ${SAHANA_QDRANT_API_KEY:-}
-      SAHANA_OPENAI_API_KEY: ${SAHANA_OPENAI_API_KEY:-}
-      SAHANA_KB_EMBEDDER: ${SAHANA_KB_EMBEDDER:-openai}
-      SAHANA_LLM_MODE: ${SAHANA_LLM_MODE:-live}
-      SAHANA_GROQ_API_KEY: ${SAHANA_GROQ_API_KEY:-}
-      SAHANA_OPENROUTER_API_KEY: ${SAHANA_OPENROUTER_API_KEY:-}
-      # Local embedder + tokenizer caches live under the hf_cache mount so they
-      # download once and persist across restarts.
       SAHANA_FASTEMBED_CACHE_DIR: /app/.cache/huggingface/fastembed
     volumes:
+      # Local MiniLM embedder + tokenizer caches persist across restarts and
+      # download only once (see the healthcheck start_period below).
       - hf_cache:/app/.cache/huggingface
     networks:
       - sahana
+    # Liveness only, so a missing external dependency (DB, Qdrant, keys) never
+    # flaps the container. start_period is generous to absorb the one-time model
+    # download into hf_cache on first boot; steady-state checks stay tight.
     healthcheck:
       test:
         [
@@ -36,9 +31,17 @@ services:
           "import urllib.request,sys; sys.exit(0) if urllib.request.urlopen('http://127.0.0.1:8000/health/live', timeout=2).status == 200 else sys.exit(1)",
         ]
       interval: 15s
-      timeout: 3s
+      timeout: 5s
       retries: 5
-      start_period: 10s
+      start_period: 120s
+    # The api carries the ONNX MiniLM embedder; cap memory so it cannot starve
+    # the host, but reserve enough that the embedder is never OOM-killed.
+    deploy:
+      resources:
+        limits:
+          memory: 2g
+        reservations:
+          memory: 512m
 
   web:
     build:
@@ -58,6 +61,37 @@ services:
       timeout: 3s
       retries: 5
       start_period: 5s
+    deploy:
+      resources:
+        limits:
+          memory: 256m
+        reservations:
+          memory: 64m
+
+  # One-shot knowledge-base ingestion into Qdrant. RAG returns nothing until this
+  # runs; it is idempotent (Phase 2), so it is safe to run on every deploy. Not
+  # started by default — it lives behind the `tools` profile:
+  #   docker compose --profile tools run --rm ingest
+  ingest:
+    image: sahana-api:latest
+    profiles:
+      - tools
+    env_file:
+      - .env
+    environment:
+      SAHANA_FASTEMBED_CACHE_DIR: /app/.cache/huggingface/fastembed
+    # The corpus lives at the repo root (outside the api build context), so it is
+    # mounted read-only and passed as --root rather than baked into the image.
+    command: ["python", "-m", "sahana_api.kb.ingest", "--path", "/data/kb"]
+    volumes:
+      - hf_cache:/app/.cache/huggingface
+      - ./data/kb:/data/kb:ro
+    depends_on:
+      api:
+        condition: service_healthy
+    networks:
+      - sahana
+    restart: "no"
 
 networks:
   sahana:
