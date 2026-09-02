@@ -1,0 +1,27 @@
+{
+  "name": "Sahana",
+  "image": "mcr.microsoft.com/devcontainers/base:ubuntu-24.04",
+  "features": {
+    "ghcr.io/devcontainers/features/docker-in-docker:2": {},
+    "ghcr.io/devcontainers/features/node:1": { "version": "20" },
+    "ghcr.io/devcontainers/features/python:1": { "version": "3.13" }
+  },
+  "forwardPorts": [8080, 8000],
+  "portsAttributes": {
+    "8080": { "label": "web (nginx SPA)", "onAutoForward": "openPreview" },
+    "8000": { "label": "api (FastAPI)", "onAutoForward": "silent" }
+  },
+  "onCreateCommand": "curl -LsSf https://astral.sh/uv/install.sh | sh",
+  "postCreateCommand": "cp -n .env.docker.example .env || true",
+  "remoteUser": "vscode",
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-python.python",
+        "charliermarsh.ruff",
+        "dbaeumer.vscode-eslint",
+        "esbenp.prettier-vscode"
+      ]
+    }
+  }
+}
