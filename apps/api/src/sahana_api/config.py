@@ -72,7 +72,7 @@ class Settings(BaseSettings):
     # -- HTTP server -------------------------------------------------------
     api_host: str = "0.0.0.0"
     api_port: int = 8000
-    cors_allow_origins: list[str] = Field(default_factory=lambda: ["http://localhost:8080"])
+    cors_allow_origins: list[str] = Field(default_factory=lambda: ["http://localhost:3000"])
 
     # -- Database (Supabase Postgres via SQLAlchemy async + asyncpg) -------
     # ``database_url`` is the pooled runtime connection (Supabase transaction
@@ -87,6 +87,14 @@ class Settings(BaseSettings):
     # boots (liveness stays up) and readiness reports Postgres as not-ready.
     database_url: str | None = None
     database_migration_url: str | None = None
+    # Pool sizing (see ADR 0014). A chat request peaks at three concurrent
+    # connections: the main request session plus the two context-fan-out nodes
+    # (patient_lookup, memory_recall), each opening its own session from the
+    # sessionmaker. The ceiling is ``db_pool_size + db_max_overflow`` = 15, which
+    # sustains ~5 chat requests at their simultaneous fan-out instant and matches
+    # the Supabase free-tier transaction-pooler default pool. Migrations use the
+    # separate direct connection, so they do not draw from this pool. Raise both
+    # (and the Supabase pooler pool size) together for higher concurrency.
     db_pool_size: int = 5
     db_max_overflow: int = 10
     db_pool_timeout: float = 30.0
