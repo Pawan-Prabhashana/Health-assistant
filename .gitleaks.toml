@@ -1,0 +1,19 @@
+# gitleaks configuration. Extends the default ruleset and allowlists the files
+# that legitimately contain placeholder-shaped values (documented example
+# environments and the generated OpenAPI snapshot), so the scan fails only on a
+# real committed secret.
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Documented placeholders and generated artefacts, not secrets."
+paths = [
+  '''\.env\.example$''',
+  '''\.env\.docker\.example$''',
+  '''apps/web/openapi\.json$''',
+]
+regexes = [
+  # Connection-string placeholders in the example env files.
+  '''postgresql\+asyncpg://postgres[^@]*@(aws-0-REGION\.pooler\.supabase\.com|db\.PROJECT\.supabase\.co)''',
+]

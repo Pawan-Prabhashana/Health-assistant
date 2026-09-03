@@ -1,0 +1,168 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# Cancel superseded runs on the same ref to save runner time.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  backend-fast:
+    name: backend-fast (lint, types, fast tests)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/api
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          version: "0.8.4"
+          python-version: "3.13"
+          enable-cache: true
+          cache-dependency-glob: apps/api/uv.lock
+      - run: uv sync --extra dev --frozen
+      - run: uv run ruff check
+      - run: uv run ruff format --check
+      - run: uv run mypy --strict src
+      - run: uv run pytest -m "not pg and not qdrant and not llm_live"
+
+  backend-full:
+    name: backend-full (testcontainers pg + qdrant)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/api
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          version: "0.8.4"
+          python-version: "3.13"
+          enable-cache: true
+          cache-dependency-glob: apps/api/uv.lock
+      - run: uv sync --extra dev --frozen
+      # Docker is available on the runner, so testcontainers spins up real
+      # Postgres (pgvector) and Qdrant for the pg/qdrant marker tiers.
+      - run: uv run pytest -m "pg or qdrant"
+
+  frontend:
+    name: frontend (lint, build, vitest)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run build
+      - run: npm run test
+
+  openapi-drift:
+    name: openapi-drift (types cannot drift from Pydantic)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          version: "0.8.4"
+          python-version: "3.13"
+          enable-cache: true
+          cache-dependency-glob: apps/api/uv.lock
+      - run: uv sync --extra dev --frozen
+        working-directory: apps/api
+      - name: Generate the live OpenAPI document
+        working-directory: apps/api
+        env:
+          SAHANA_LLM_MODE: fake
+          SAHANA_TAVILY_MODE: fake
+        run: |
+          uv run python -c "import json; from sahana_api.main import create_app; print(json.dumps(create_app().openapi(), indent=2))" > /tmp/openapi.json
+      - name: Compare against the committed snapshot
+        run: |
+          if ! diff -u apps/web/openapi.json /tmp/openapi.json; then
+            echo "::error::OpenAPI snapshot is stale. Refresh it with:"
+            echo "  (cd apps/api && uv run python -c \"import json; from sahana_api.main import create_app; print(json.dumps(create_app().openapi(), indent=2))\") > apps/web/openapi.json && (cd apps/web && npm run gen:api)"
+            exit 1
+          fi
+
+  image-smoke:
+    name: image-smoke (health + incremental streaming through nginx)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          version: "0.8.4"
+          python-version: "3.13"
+          enable-cache: true
+          cache-dependency-glob: apps/api/uv.lock
+      - name: Prepare env (fake providers, ephemeral pg + qdrant)
+        run: cp .env.docker.example .env
+      - name: Start Postgres and Qdrant
+        run: docker compose -f docker-compose.yml -f docker-compose.ci.yml up -d postgres qdrant
+      - name: Apply migrations from the runner
+        working-directory: apps/api
+        env:
+          SAHANA_DATABASE_MIGRATION_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/sahana
+        run: |
+          uv sync --extra dev --frozen
+          for i in $(seq 1 30); do pg_isready -h localhost -p 5432 -U postgres && break || sleep 2; done
+          uv run alembic upgrade head
+      - name: Build and start the full stack
+        run: docker compose -f docker-compose.yml -f docker-compose.ci.yml up -d --build
+      - name: Wait for both containers healthy
+        run: |
+          for i in $(seq 1 40); do
+            state=$(docker compose -f docker-compose.yml -f docker-compose.ci.yml ps --format '{{.Service}} {{.Health}}')
+            echo "$state"
+            if echo "$state" | grep -q 'web healthy' && echo "$state" | grep -q 'api healthy'; then
+              echo "both healthy"; exit 0
+            fi
+            sleep 3
+          done
+          echo "::error::containers did not become healthy"; docker compose -f docker-compose.yml -f docker-compose.ci.yml logs; exit 1
+      - name: Create a session through nginx
+        id: session
+        run: |
+          curl -sf -X POST http://localhost:8080/api/patients -H 'Content-Type: application/json' -d '{"phone":"0771234567"}' >/dev/null
+          SID=$(curl -sf -X POST http://localhost:8080/api/sessions -H 'Content-Type: application/json' -d '{"phone":"0771234567"}' | python3 -c 'import sys,json;print(json.load(sys.stdin)["id"])')
+          echo "sid=$SID" >> "$GITHUB_OUTPUT"
+      - name: Assert the stream arrives in multiple SSE frames through nginx
+        run: |
+          curl -N -s http://localhost:8080/api/chat/stream \
+            -H 'Content-Type: application/json' \
+            -d "{\"session_id\":\"${{ steps.session.outputs.sid }}\",\"message\":\"Hello there\"}" > /tmp/stream.txt
+          echo "--- stream ---"; cat /tmp/stream.txt
+          deltas=$(grep -c '^event: delta' /tmp/stream.txt || true)
+          echo "delta frames: $deltas"
+          test "$deltas" -ge 2
+          grep -q '^event: routing' /tmp/stream.txt
+          grep -q '^event: final' /tmp/stream.txt
+      - name: Tear down
+        if: always()
+        run: docker compose -f docker-compose.yml -f docker-compose.ci.yml down -v
+
+  secret-scan:
+    name: secret-scan (gitleaks)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

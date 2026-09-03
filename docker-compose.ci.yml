@@ -1,0 +1,41 @@
+# CI-only overlay for the image-smoke job: ephemeral Postgres (pgvector) and
+# Qdrant, and fake provider modes so the full stack boots and streams with no
+# keys and no external services. Used as:
+#   docker compose -f docker-compose.yml -f docker-compose.ci.yml up -d --build
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: sahana
+    # Published so the runner can apply Alembic migrations before the app starts.
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d sahana"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    networks:
+      - sahana
+
+  qdrant:
+    image: qdrant/qdrant:v1.12.4
+    networks:
+      - sahana
+
+  api:
+    environment:
+      SAHANA_LLM_MODE: fake
+      SAHANA_TAVILY_MODE: fake
+      SAHANA_KB_EMBEDDER: local
+      SAHANA_DATABASE_URL: postgresql+asyncpg://postgres:postgres@postgres:5432/sahana
+      SAHANA_DATABASE_MIGRATION_URL: postgresql+asyncpg://postgres:postgres@postgres:5432/sahana
+      SAHANA_QDRANT_URL: http://qdrant:6333
+    depends_on:
+      postgres:
+        condition: service_healthy
+      qdrant:
+        condition: service_started
