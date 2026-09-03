@@ -10,16 +10,23 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from sahana_api.cag.cache import CagCache
-from sahana_api.chat.service import persist_turn, schedule_cache_side_effects, stream_chat
+from sahana_api.chat.service import (
+    persist_turn,
+    record_turn_metrics,
+    schedule_cache_side_effects,
+    schedule_memory_maintenance,
+    stream_chat,
+)
 from sahana_api.config import Settings
 from sahana_api.db.session import get_session
 from sahana_api.errors import NotFoundError, ServiceUnavailableError
 from sahana_api.graph.context import RequestContext
 from sahana_api.graph.pipeline import CompiledPipeline, run_pipeline
-from sahana_api.llm.base import ProviderNotConfiguredError
+from sahana_api.llm.base import ChatModel, ProviderNotConfiguredError
 from sahana_api.llm.registry import ModelRegistry
 from sahana_api.memory.recall import SessionProvider
 from sahana_api.memory.summarize import summarize_session
+from sahana_api.ratelimit import RateLimiter
 from sahana_api.repositories.messages import MessageRepository
 from sahana_api.repositories.sessions import SessionRepository
 from sahana_api.schemas.chat import (
@@ -65,6 +72,24 @@ def _session_provider(request: Request) -> SessionProvider | None:
     return provider
 
 
+def _summary_model(request: Request, settings: Settings) -> ChatModel | None:
+    """Resolve the cheap summary model, or ``None`` when it is not configured."""
+    models: ModelRegistry | None = request.app.state.llm
+    if models is None:
+        return None
+    try:
+        return models.get_model(settings.summary_model_role)
+    except ProviderNotConfiguredError:
+        return None
+
+
+async def _enforce_rate_limit(request: Request, phone: str | None) -> None:
+    """Apply the chat rate limit, keyed by identity then IP."""
+    limiter: RateLimiter | None = request.app.state.rate_limiter
+    if limiter is not None:
+        await limiter.enforce(request, phone)
+
+
 async def _require_session(session: AsyncSession, session_id: uuid.UUID) -> None:
     if await SessionRepository(session).get_by_id(session_id) is None:
         raise NotFoundError("session")
@@ -80,12 +105,20 @@ async def chat(
     payload: ChatRequest, request: Request, session: SessionDep, background: BackgroundTasks
 ) -> ChatResponse:
     """Run the pipeline, persist the turn, close the CAG loop, and return the result."""
+    await _enforce_rate_limit(request, payload.phone)
     await _require_session(session, payload.session_id)
+    settings = _settings(request)
     context = RequestContext(session_id=payload.session_id, phone=payload.phone)
     result = await run_pipeline(_pipeline(request), payload.message, context)
     await persist_turn(session, payload.session_id, payload.message, result)
-    schedule_cache_side_effects(
-        background, _cag(request), _settings(request), payload.message, result
+    record_turn_metrics(result)
+    schedule_cache_side_effects(background, _cag(request), settings, payload.message, result)
+    schedule_memory_maintenance(
+        background,
+        _session_provider(request),
+        _summary_model(request, settings),
+        settings,
+        payload.session_id,
     )
     return ChatResponse.from_result(result)
 
@@ -93,20 +126,23 @@ async def chat(
 @router.post("/stream", summary="One chat turn, streamed over SSE")
 async def chat_stream(payload: ChatRequest, request: Request) -> StreamingResponse:
     """Stream the same pipeline as ``routing``/``delta``/``final``/``error`` SSE events."""
+    await _enforce_rate_limit(request, payload.phone)
     provider = _session_provider(request)
     if provider is None:
         raise ServiceUnavailableError("chat streaming requires a database")
     async with provider() as session:
         await _require_session(session, payload.session_id)
+    settings = _settings(request)
     context = RequestContext(session_id=payload.session_id, phone=payload.phone)
     stream = stream_chat(
         pipeline=_pipeline(request),
         session_provider=provider,
         cag=_cag(request),
-        settings=_settings(request),
+        settings=settings,
         session_id=payload.session_id,
         message=payload.message,
         context=context,
+        summary_model=_summary_model(request, settings),
     )
     return StreamingResponse(
         stream,

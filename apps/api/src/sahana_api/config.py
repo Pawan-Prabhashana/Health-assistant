@@ -199,6 +199,22 @@ class Settings(BaseSettings):
     cache_store_enabled: bool = True
     sse_keepalive_seconds: float = 15.0
 
+    # -- Operational controls (Phase 9); see ADR 0015 --------------------
+    # Rate limiting on the expensive chat routes, keyed by hashed patient
+    # identity when present and by client IP otherwise. The limit is a
+    # ``limits``-library string (e.g. "30/minute"). The store is in-memory, so
+    # limits are per-process: running multiple api replicas requires a shared
+    # store (see the runbook). ``rate_limit_enabled`` disables it for tests/dev.
+    rate_limit_enabled: bool = True
+    rate_limit_chat: str = "30/minute"
+    # Input bounds: the first line against oversized input reaching the model.
+    # ``max_message_chars`` mirrors the ChatRequest schema cap; ``max_request_bytes``
+    # rejects oversized bodies before parsing; ``max_sessions_per_patient`` caps
+    # thread creation per identity.
+    max_message_chars: int = 4000
+    max_request_bytes: int = 65536
+    max_sessions_per_patient: int = 100
+
     # -- Provider configuration (declared now, consumed in later phases) ---
     # Supabase project references (used by later phases; not read here).
     supabase_url: str | None = None

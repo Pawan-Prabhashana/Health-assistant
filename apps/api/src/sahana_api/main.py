@@ -28,6 +28,9 @@ from sahana_api.kb.retriever import KnowledgeRetriever
 from sahana_api.llm.health import make_llm_check
 from sahana_api.llm.registry import ModelRegistry, build_model_registry
 from sahana_api.logging import configure_logging, get_logger
+from sahana_api.metrics import router as metrics_router
+from sahana_api.middleware import BodySizeLimitMiddleware, CorrelationIdMiddleware
+from sahana_api.ratelimit import build_rate_limiter
 from sahana_api.readiness import ReadinessRegistry
 from sahana_api.routers import chat_router, health_router, patients_router, sessions_router
 from sahana_api.tools.tavily import build_tavily_client, make_tavily_check
@@ -154,7 +157,12 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.llm = None
     app.state.cag = None
     app.state.graph = None
+    app.state.rate_limiter = build_rate_limiter(resolved)
 
+    # Middleware is applied outermost-first in reverse add order, giving the flow:
+    # correlation id -> CORS -> body-size limit -> app. The correlation id wraps
+    # everything so even a rejected request carries an X-Request-ID header.
+    app.add_middleware(BodySizeLimitMiddleware, max_bytes=resolved.max_request_bytes)
     app.add_middleware(
         CORSMiddleware,
         allow_origins=resolved.cors_allow_origins,
@@ -162,6 +170,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+    app.add_middleware(CorrelationIdMiddleware)
 
     register_exception_handlers(app)
 
@@ -169,6 +178,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(patients_router)
     app.include_router(sessions_router)
     app.include_router(chat_router)
+    app.include_router(metrics_router)
 
     @app.get("/", summary="Service landing", tags=["meta"])
     async def root() -> RootResponse:
