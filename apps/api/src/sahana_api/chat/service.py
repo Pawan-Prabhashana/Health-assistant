@@ -23,15 +23,22 @@ from sahana_api.graph.context import RequestContext
 from sahana_api.graph.pipeline import (
     CompiledPipeline,
     DeltaEvent,
+    ErrorEvent,
     FinalEvent,
     PipelineResult,
     stream_pipeline,
 )
 from sahana_api.graph.schemas import Verdict
+from sahana_api.llm.base import ChatModel
+from sahana_api.logging import get_logger
 from sahana_api.memory.recall import SessionProvider
+from sahana_api.memory.summarize import maybe_refresh_summary
+from sahana_api.metrics import record_error, record_turn
 from sahana_api.models.enums import MessageRole
 from sahana_api.repositories.messages import MessageRepository
 from sahana_api.schemas.chat import format_sse
+
+_logger = get_logger("sahana_api.chat.service")
 
 
 def _assistant_metadata(result: PipelineResult | None, *, incomplete: bool) -> dict[str, Any]:
@@ -94,6 +101,55 @@ def schedule_cache_side_effects(
     background.add_task(_apply_cache_side_effects, cag, settings, question, result)
 
 
+def record_turn_metrics(result: PipelineResult) -> None:
+    """Record per-turn Prometheus metrics for a completed turn."""
+    record_turn(
+        result.route.value if result.route is not None else None,
+        result.verdict.value,
+        result.latency_ms,
+    )
+
+
+async def _run_memory_maintenance(
+    session_provider: SessionProvider | None,
+    summary_model: ChatModel | None,
+    settings: Settings,
+    session_id: uuid.UUID,
+) -> None:
+    """Refresh the rolling summary when the thread has grown past the threshold.
+
+    Runs in its own session (after the turn is committed) and is best-effort: a
+    summary failure must never break the turn it follows.
+    """
+    if session_provider is None or summary_model is None:
+        return
+    try:
+        async with session_provider() as session:
+            await maybe_refresh_summary(
+                session,
+                summary_model,
+                session_id,
+                threshold=settings.memory_summary_threshold,
+                keep_recent=settings.memory_recall_turns,
+            )
+            await session.commit()
+    except Exception:
+        _logger.exception("memory.summary.failed")
+
+
+def schedule_memory_maintenance(
+    background: BackgroundTasks,
+    session_provider: SessionProvider | None,
+    summary_model: ChatModel | None,
+    settings: Settings,
+    session_id: uuid.UUID,
+) -> None:
+    """Schedule the rolling-summary refresh to run after the response is sent."""
+    background.add_task(
+        _run_memory_maintenance, session_provider, summary_model, settings, session_id
+    )
+
+
 async def _with_keepalive(source: AsyncIterator[str], interval: float) -> AsyncIterator[str]:
     """Relay SSE frames, injecting a heartbeat comment when the source is idle."""
     queue: asyncio.Queue[str | None] = asyncio.Queue()
@@ -131,6 +187,7 @@ async def stream_chat(
     session_id: uuid.UUID,
     message: str,
     context: RequestContext,
+    summary_model: ChatModel | None = None,
 ) -> AsyncIterator[str]:
     """Yield SSE frames for a streamed turn, persisting the result even on disconnect."""
     pieces: list[str] = []
@@ -138,19 +195,31 @@ async def stream_chat(
 
     async def frames() -> AsyncIterator[str]:
         nonlocal final
-        async for event in stream_pipeline(pipeline, message, context):
-            if isinstance(event, DeltaEvent):
-                pieces.append(event.text)
-            elif isinstance(event, FinalEvent):
-                final = event.result
-            yield format_sse(event)
+        try:
+            async for event in stream_pipeline(pipeline, message, context):
+                if isinstance(event, DeltaEvent):
+                    pieces.append(event.text)
+                elif isinstance(event, FinalEvent):
+                    final = event.result
+                yield format_sse(event)
+        except Exception:
+            _logger.exception("chat.stream.failed")
+            record_error("pipeline_error")
+            yield format_sse(
+                ErrorEvent(
+                    code="pipeline_error",
+                    message="Something went wrong answering that. Please try again.",
+                )
+            )
 
     try:
         async for frame in _with_keepalive(frames(), settings.sse_keepalive_seconds):
             yield frame
     finally:
         await asyncio.shield(
-            _finalize_stream(session_provider, cag, settings, session_id, message, pieces, final)
+            _finalize_stream(
+                session_provider, cag, settings, session_id, message, pieces, final, summary_model
+            )
         )
 
 
@@ -162,8 +231,9 @@ async def _finalize_stream(
     message: str,
     pieces: list[str],
     final: PipelineResult | None,
+    summary_model: ChatModel | None,
 ) -> None:
-    """Persist the turn (partial if disconnected) and apply CAG side effects."""
+    """Persist the turn (partial if disconnected), apply CAG effects, refresh memory."""
     answer = final.answer if final is not None else "".join(pieces)
     metadata = _assistant_metadata(final, incomplete=final is None)
     if session_provider is not None:
@@ -174,3 +244,5 @@ async def _finalize_stream(
             await session.commit()
     if final is not None:
         await _apply_cache_side_effects(cag, settings, message, final)
+        record_turn_metrics(final)
+    await _run_memory_maintenance(session_provider, summary_model, settings, session_id)

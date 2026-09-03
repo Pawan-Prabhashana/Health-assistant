@@ -47,3 +47,25 @@ async def summarize_session(
     summary = completion.text.strip()
     await SessionRepository(session).set_summary(session_id, summary)
     return summary
+
+
+async def maybe_refresh_summary(
+    session: AsyncSession,
+    model: ChatModel,
+    session_id: uuid.UUID,
+    *,
+    threshold: int,
+    keep_recent: int,
+) -> str | None:
+    """Refresh the rolling summary when a thread has grown past ``threshold``.
+
+    Recall returns the rolling summary plus the last ``keep_recent`` turns, so
+    once a thread exceeds the threshold the summary must be refreshed as new turns
+    arrive; otherwise turns older than the window but newer than the last summary
+    fall out of context — a silent mid-conversation memory gap. Returns the new
+    summary, or ``None`` when the thread is still within the threshold.
+    """
+    count = await MessageRepository(session).count_for_session(session_id)
+    if count <= threshold:
+        return None
+    return await summarize_session(session, model, session_id, keep_recent=keep_recent)
