@@ -12,6 +12,7 @@ from __future__ import annotations
 from sahana_api.config import ModelPrice
 from sahana_api.llm.base import Role, Usage
 from sahana_api.logging import get_logger
+from sahana_api.metrics import record_llm_usage
 
 _logger = get_logger("sahana_api.llm.usage")
 
@@ -34,7 +35,7 @@ def estimate_cost(
 
 
 def log_usage(role: Role, model: str, usage: Usage) -> None:
-    """Emit the structured usage log for one completion."""
+    """Emit the structured usage log for one completion and update metrics."""
     _logger.info(
         "llm.usage",
         role=role,
@@ -44,4 +45,7 @@ def log_usage(role: Role, model: str, usage: Usage) -> None:
         total_tokens=usage.total_tokens,
         estimated_cost_usd=usage.estimated_cost_usd,
         latency_ms=usage.latency_ms,
+    )
+    record_llm_usage(
+        role, model, usage.prompt_tokens, usage.completion_tokens, usage.estimated_cost_usd
     )

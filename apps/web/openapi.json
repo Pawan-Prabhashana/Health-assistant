@@ -282,7 +282,7 @@
           "sessions"
         ],
         "summary": "Create a conversation thread",
-        "description": "Create a thread, associating a patient when the phone resolves.",
+        "description": "Create a thread, associating a patient when the phone resolves.\n\nAn identified patient is capped at ``max_sessions_per_patient`` threads; over\nthe cap the request is rejected with ``409`` rather than growing unbounded.",
         "operationId": "create_session_sessions_post",
         "requestBody": {
           "required": true,
@@ -800,6 +800,26 @@
                 "schema": {
                   "$ref": "#/components/schemas/HTTPValidationError"
                 }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/metrics": {
+      "get": {
+        "tags": [
+          "ops"
+        ],
+        "summary": "Prometheus metrics (operational, not a business endpoint)",
+        "description": "Return the current metrics in Prometheus text exposition format.",
+        "operationId": "metrics_metrics_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
               }
             }
           }

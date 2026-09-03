@@ -149,6 +149,9 @@ export interface paths {
         /**
          * Create a conversation thread
          * @description Create a thread, associating a patient when the phone resolves.
+         *
+         *     An identified patient is capped at ``max_sessions_per_patient`` threads; over
+         *     the cap the request is rejected with ``409`` rather than growing unbounded.
          */
         post: operations["create_session_sessions_post"];
         delete?: never;
@@ -276,6 +279,26 @@ export interface paths {
          * @description Delete a session's messages and summary, keeping the session record.
          */
         delete: operations["chat_clear_memory_chat_memory_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/metrics": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Prometheus metrics (operational, not a business endpoint)
+         * @description Return the current metrics in Prometheus text exposition format.
+         */
+        get: operations["metrics_metrics_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -1298,6 +1321,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    metrics_metrics_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
                 };
             };
         };
