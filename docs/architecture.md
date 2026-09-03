@@ -30,7 +30,7 @@ A named volume, `hf_cache`, is reserved on the api container for the local
 MiniLM embedder used by a later phase. It is declared from Phase 0 so the
 topology is stable across phases.
 
-## Request routing (planned)
+## Request routing
 
 Every incoming question is classified in parallel and routed down exactly one of
 five paths:
@@ -43,11 +43,40 @@ five paths:
 5. **Refusal** — a templated response for out-of-scope or unsafe requests.
 
 A **CAG cache** short-circuits repeated FAQs so common questions bypass the full
-decision graph. The classifier evaluates candidate routes concurrently and the
-decision graph selects exactly one path; the response is assembled and returned
-in a single outward round-trip.
+decision graph. `START` fans out to five concurrent nodes — three classifiers
+(guardrail, router, cache probe) plus two context nodes (patient lookup, memory
+recall) — which fan into a pure-logic `decide` node that selects exactly one
+terminal. The response is assembled and returned in a single outward round-trip:
+*outside sync, inside async*.
 
-## Provider stack (planned)
+```mermaid
+flowchart TD
+    START([request]) --> G[guardrail]
+    START --> R[router]
+    START --> C[cache probe]
+    START --> P[patient lookup]
+    START --> M[memory recall]
+    G --> D{decide}
+    R --> D
+    C --> D
+    P --> D
+    M --> D
+    D -->|out of scope| REF[refusal]
+    D -->|gated cache hit| CACHE[cached answer]
+    D -->|proceed| TOOL[tool: crm / rag+crag / direct / web]
+    TOOL --> SYN[synthesizer]
+    REF --> OUT([sync body or SSE final])
+    CACHE --> OUT
+    SYN --> OUT
+```
+
+`decide` precedence: out-of-scope wins first, then a gated cache hit (similarity
+threshold + unexpired + allowlisted route), otherwise proceed on the router's
+route with a low-confidence fallback to `direct`. The synthesizer answers the tool
+result synchronously (`POST /chat`) or streamed (`POST /chat/stream`) without a
+second model call. CRM is never cached; the served-hit counter is post-gate.
+
+## Provider stack
 
 | Concern          | Provider                                        |
 | ---------------- | ----------------------------------------------- |
@@ -63,7 +92,56 @@ in a single outward round-trip.
 The backend exposes all 16 endpoints: 3 health/config, 4 patients, 4 sessions, and
 5 chat (`POST /chat`, `POST /chat/stream`, `GET /chat/history`,
 `POST /chat/summarize`, `DELETE /chat/memory`). A courtesy `GET /` landing route
-sits outside that count.
+and a `GET /metrics` operational (Prometheus) endpoint sit outside that count.
+
+## What exists as of Phase 9
+
+Phase 9 adds the operational layer and closes the project out. See
+[ADR 0015](adr/0015-operational-hardening.md).
+
+- **CI (GitHub Actions)**: `backend-fast`, `backend-full` (pg + qdrant
+  testcontainers), `frontend`, `openapi-drift` (the generated types can never
+  drift from the Pydantic models), `image-smoke` (health + multi-frame streaming
+  through nginx as a permanent regression test), and `secret-scan` (gitleaks).
+- **Observability**: a correlation id per request, bound into every structlog line
+  and returned as `X-Request-ID`; a Prometheus `/metrics` endpoint (route/verdict
+  latency and counts, CAG hit rate, LLM token/cost by role and model, error
+  counts). The PII-free reasoning trace goes to logs, with a documented seam for
+  OpenTelemetry spans. PII redaction stays intact.
+- **Rate limiting and input bounds**: chat routes limited (`429` + `Retry-After`,
+  keyed by hashed identity then IP, in-memory/per-process); oversized bodies
+  rejected (`413`), message length capped, per-patient session count capped
+  (`409`), pagination bounded.
+- **Auto-summarization**: past `memory_summary_threshold` the rolling summary is
+  refreshed server-side after each turn (non-blocking), so a long thread never
+  loses the middle of the conversation.
+- **Secrets**: `.env` gitignored, `.env.docker.example` placeholders only, proven
+  by gitleaks in CI.
+
+## What exists as of Phase 7
+
+Phase 7 delivers the frontend the backend was built for — the full chat
+experience served at `http://localhost:3000` through nginx. See
+[ADR 0013](adr/0013-frontend-architecture.md).
+
+- **OpenAPI-generated types (anti-drift)**: the API types are generated from the
+  backend schema with `openapi-typescript` (`npm run gen:api`); a small typed
+  client calls all sixteen endpoints, and the sync `POST /chat` body and the SSE
+  `final` payload share the one `ChatResponse` shape.
+- **Fetch-based SSE**: `POST /chat/stream` carries a body, so `EventSource`
+  (GET-only) cannot be used; a `fetch` + `TextDecoder` client parses
+  `routing`/`delta`/`final`/`error` frames, skips keepalives, and is cancellable
+  via `AbortController`.
+- **Flows**: phone identity (persisted, re-resolved on boot), session list CRUD,
+  a streaming chat thread with incremental tokens, the CRM table rendered from
+  `final.structured`, RAG/web citations, and distinct refusal / cache-hit /
+  tool-backed states with route and latency shown unobtrusively.
+- **State**: TanStack Query for server state, Zustand for identity and active
+  session; CSS Modules over a design-token system; WCAG AA accessibility with a
+  polite `aria-live` announcement for completed streamed answers.
+- **Tests**: Vitest + React Testing Library + MSW (including a mocked SSE
+  stream) cover the parser, streaming thread, CRM table, identity, session CRUD,
+  and a refusal.
 
 ## What exists as of Phase 6
 

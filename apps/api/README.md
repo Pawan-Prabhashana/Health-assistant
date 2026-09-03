@@ -42,6 +42,13 @@ uv sync --extra dev
 Postgres unreachable), while `/health/live` stays `200` so the container is still
 considered live.
 
+`GET /metrics` exposes Prometheus metrics (route/verdict latency and counts, CAG
+cache hit rate, LLM token/cost by role and model, error counts). It is an
+operational endpoint, not one of the sixteen business endpoints above. Every
+request is assigned a correlation id, bound into all logs and returned as the
+`X-Request-ID` response header. Chat routes are rate limited (`429` +
+`Retry-After`); see [ADR 0015](../../docs/adr/0015-operational-hardening.md).
+
 ## Database
 
 Migrations are managed with Alembic and run against the direct connection

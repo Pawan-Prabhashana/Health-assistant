@@ -35,6 +35,28 @@ for the frontend decisions,
 for the deployment posture, and
 [`docs/data-handling.md`](docs/data-handling.md) for the PII posture.
 
+**Phase 9 closes the project out** with the operational layer: CI (lint, types,
+tests on real Postgres/Qdrant, an OpenAPI-drift guard, an image-smoke test that
+proves incremental streaming through nginx, and gitleaks), observability
+(correlation ids, a Prometheus `/metrics` endpoint), rate limiting and input
+bounds, and server-side auto-summarization of long threads. See
+[`docs/adr/0015-operational-hardening.md`](docs/adr/0015-operational-hardening.md),
+the [operations runbook](docs/runbook.md), and the [demo script](docs/demo.md).
+
+## Architecture in brief
+
+A question arrives in one HTTP request. `START` fans out to five concurrent nodes
+— three classifiers (guardrail, router, cache probe) and two context nodes
+(patient lookup, memory recall) — that fan into a pure-logic `decide` node
+choosing exactly one of five routes: **CRM** (identity-gated record lookup),
+**RAG** (retrieval + CRAG grading over the Qdrant knowledge base), **direct**
+(concierge reply), **web** (Tavily), or **refusal**. A route-gated CAG cache
+short-circuits repeat FAQs. The synthesizer answers synchronously (`POST /chat`)
+or streamed over SSE (`POST /chat/stream`) from the same result. The guiding
+principle is *outside sync, inside async*: one clean round-trip, concurrent work
+inside. The [architecture doc](docs/architecture.md) has the full picture and a
+pipeline diagram.
+
 ## Topology
 
 The system runs as two containers on a private network:
@@ -183,13 +205,46 @@ Run `make help` to list them.
 │   │   └── src/sahana_api/  # application package
 │   └── web/                 # React + Vite + TypeScript client (nginx in prod)
 ├── .devcontainer/           # Codespaces / devcontainer parity
+├── .github/workflows/       # CI: lint, types, tests, openapi-drift, image-smoke, gitleaks
 ├── docs/
-│   ├── architecture.md      # target architecture, per-phase status
-│   └── adr/                 # architecture decision records
+│   ├── architecture.md      # as-built architecture + pipeline diagram
+│   ├── runbook.md           # operating, metrics, key rotation, troubleshooting
+│   ├── demo.md              # five-route demo script
+│   └── adr/                 # architecture decision records (0001–0015, + index)
 ├── docker-compose.yml       # hardened two-service topology + one-shot ingest
+├── docker-compose.ci.yml    # CI overlay: ephemeral pg + qdrant, fake providers
 ├── Makefile                 # developer task runner
 └── .env.docker.example      # full environment contract (copy to .env)
 ```
+
+## Testing
+
+The backend suite is tiered by pytest marker so the fast tier needs no Docker and
+no keys:
+
+```bash
+cd apps/api
+uv run pytest -m "not pg and not qdrant and not llm_live"   # fast: lint-speed, hermetic
+uv run pytest -m "pg or qdrant"                              # real Postgres + Qdrant (testcontainers)
+uv run pytest -m llm_live                                    # opt-in live-provider latency smoke
+```
+
+The frontend runs Vitest + React Testing Library + MSW (including a mocked SSE
+stream): `cd apps/web && npm run test`. CI runs all of these plus an OpenAPI-drift
+check and an image-smoke test (see [`.github/workflows/ci.yml`](.github/workflows/ci.yml)).
+
+## Observability and ops
+
+- **`GET /metrics`** — Prometheus text (an operational endpoint, not one of the 16
+  business endpoints): route/verdict latency and counts, CAG cache hit rate, LLM
+  token and estimated-cost counters by role and model, and error counts.
+- **Correlation ids** — every request is assigned one, bound into every structlog
+  line, and returned as `X-Request-ID`; no PII is logged.
+- **Health** — `GET /health/live` (liveness) and `GET /health/ready` (per-
+  dependency readiness, `503` when a dependency is down while liveness stays up).
+
+See the [runbook](docs/runbook.md) for reading the metrics, rotating keys, rate-
+limit tuning, and troubleshooting.
 
 ## Configuration
 
@@ -197,7 +252,8 @@ All backend configuration is read from the environment (prefix `SAHANA_`) into a
 single typed `Settings` object. Every variable — grouped, with required/optional
 and runtime/migration notes — is documented in
 [`.env.docker.example`](.env.docker.example); copy it to `.env` (gitignored) and
-fill in real keys. Secrets are never committed and never returned by `/config`.
+fill in real keys. Secrets are never committed and never returned by `/config`,
+and gitleaks enforces this in CI.
 
 ## License
 
