@@ -13,6 +13,7 @@ from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from sahana_api.db.engine import DatabaseNotConfiguredError
+from sahana_api.ratelimit import RateLimitExceededError
 from sahana_api.schemas.common import ErrorDetail, ErrorEnvelope, FieldError
 
 
@@ -29,6 +30,15 @@ class ServiceUnavailableError(Exception):
 
     def __init__(self, message: str) -> None:
         super().__init__(message)
+        self.message = message
+
+
+class ConflictError(Exception):
+    """Raised when a request violates a resource cap or invariant (surfaced as 409)."""
+
+    def __init__(self, code: str, message: str) -> None:
+        super().__init__(message)
+        self.code = code
         self.message = message
 
 
@@ -60,6 +70,21 @@ def register_exception_handlers(app: FastAPI) -> None:
         return JSONResponse(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             content=_envelope("service_unavailable", exc.message),
+        )
+
+    @app.exception_handler(ConflictError)
+    async def _conflict(_request: Request, exc: ConflictError) -> JSONResponse:
+        return JSONResponse(
+            status_code=status.HTTP_409_CONFLICT,
+            content=_envelope(exc.code, exc.message),
+        )
+
+    @app.exception_handler(RateLimitExceededError)
+    async def _rate_limited(_request: Request, exc: RateLimitExceededError) -> JSONResponse:
+        return JSONResponse(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            content=_envelope("rate_limited", "too many requests; please slow down"),
+            headers={"Retry-After": str(exc.retry_after)},
         )
 
     @app.exception_handler(RequestValidationError)

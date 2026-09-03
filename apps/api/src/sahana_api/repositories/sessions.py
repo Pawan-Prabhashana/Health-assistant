@@ -6,7 +6,7 @@ import datetime
 import uuid
 from collections.abc import Sequence
 
-from sqlalchemy import delete, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -50,6 +50,13 @@ class SessionRepository:
             .offset(offset)
         )
         return result.scalars().all()
+
+    async def count_for_patient(self, patient_id: uuid.UUID) -> int:
+        """Return how many sessions a patient owns (for the per-identity cap)."""
+        result = await self._session.execute(
+            select(func.count()).select_from(Session).where(Session.patient_id == patient_id)
+        )
+        return int(result.scalar_one())
 
     async def delete_by_id(self, session_id: uuid.UUID) -> bool:
         """Delete a session and cascade its messages. Returns whether one matched."""

@@ -5,11 +5,12 @@ from __future__ import annotations
 import uuid
 from typing import Annotated, Any, Literal
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from sahana_api.config import Settings
 from sahana_api.db.session import get_session
-from sahana_api.errors import NotFoundError
+from sahana_api.errors import ConflictError, NotFoundError
 from sahana_api.models.session import Session
 from sahana_api.phone import NormalizedPhone
 from sahana_api.repositories.patients import PatientRepository
@@ -41,12 +42,26 @@ async def _resolve_patient_id(session: AsyncSession, phone: str) -> uuid.UUID | 
     status_code=status.HTTP_201_CREATED,
     summary="Create a conversation thread",
 )
-async def create_session(payload: SessionCreate, session: SessionDep) -> SessionResponse:
-    """Create a thread, associating a patient when the phone resolves."""
+async def create_session(
+    payload: SessionCreate, session: SessionDep, request: Request
+) -> SessionResponse:
+    """Create a thread, associating a patient when the phone resolves.
+
+    An identified patient is capped at ``max_sessions_per_patient`` threads; over
+    the cap the request is rejected with ``409`` rather than growing unbounded.
+    """
+    repository = SessionRepository(session)
     patient_id = (
         await _resolve_patient_id(session, payload.phone) if payload.phone is not None else None
     )
-    thread = await SessionRepository(session).create(patient_id=patient_id, title=payload.title)
+    if patient_id is not None:
+        settings: Settings = request.app.state.settings
+        if await repository.count_for_patient(patient_id) >= settings.max_sessions_per_patient:
+            raise ConflictError(
+                "session_limit_reached",
+                f"a patient may have at most {settings.max_sessions_per_patient} conversations",
+            )
+    thread = await repository.create(patient_id=patient_id, title=payload.title)
     return SessionResponse.model_validate(thread)
 
 
