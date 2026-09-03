@@ -61,11 +61,12 @@ def settings() -> Settings:
         app_env="development",
         log_level="INFO",
         log_json=False,
-        cors_allow_origins=["http://localhost:8080"],
+        cors_allow_origins=["http://localhost:3000"],
         database_url=None,
         database_migration_url=None,
         llm_mode="fake",
         tavily_mode="fake",
+        rate_limit_enabled=False,
     )
 
 
@@ -333,8 +334,17 @@ def build_chat_client(
         *,
         cag: CagCache | None = None,
         retriever: Retriever | None = None,
+        rate_limit: str | None = None,
+        max_sessions_per_patient: int = 100,
     ) -> AsyncIterator[AsyncClient]:
-        settings = Settings(llm_mode="fake", tavily_mode="fake", kb_embedder="local")
+        settings = Settings(
+            llm_mode="fake",
+            tavily_mode="fake",
+            kb_embedder="local",
+            rate_limit_enabled=rate_limit is not None,
+            rate_limit_chat=rate_limit or "30/minute",
+            max_sessions_per_patient=max_sessions_per_patient,
+        )
         deps = build_real_deps(
             settings,
             models,
