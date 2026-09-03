@@ -22,6 +22,8 @@ dependencies = [
     "tiktoken>=0.8.0,<0.12",
     "langgraph>=0.2.0,<1",
     "httpx>=0.28.1,<0.29",
+    "prometheus-client>=0.21.0,<1",
+    "limits>=3.13.0,<6",
 ]
 
 [project.optional-dependencies]
