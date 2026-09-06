@@ -93,7 +93,11 @@ export function ChatPanel({ sessionId, phone }: ChatPanelProps): React.JSX.Eleme
 
       <div className={styles.scroll}>
         {history.isLoading ? (
-          <p className={styles.state}>Loading conversation…</p>
+          <div className={styles.loading} aria-label="Loading conversation" aria-busy="true">
+            <span className={`skeleton ${styles.loadingLineShort}`} />
+            <span className={`skeleton ${styles.loadingLineLong}`} />
+            <span className={`skeleton ${styles.loadingLineMed}`} />
+          </div>
         ) : history.isError ? (
           <div className={styles.state} role="alert">
             <p>Could not load this conversation.</p>

@@ -5,7 +5,7 @@
 // CRM turn shows its rendered text answer without the interactive table — the
 // table is rendered live from the `final` event.
 
-import type { ChatMessage, TableResponse, Verdict } from '../api/types';
+import type { ChatMessage, TableResponse, TraceEntry, Verdict } from '../api/types';
 import type { LocalTurn } from '../hooks/useChatStream';
 
 export interface AssistantView {
@@ -18,6 +18,8 @@ export interface AssistantView {
   cached: boolean;
   incomplete: boolean;
   totalTokens: number | null;
+  /** PII-free reasoning trace, present for live turns (empty for reloaded history). */
+  trace: TraceEntry[];
 }
 
 function asString(value: unknown): string | null {
@@ -47,6 +49,7 @@ export function viewFromLocalTurn(turn: LocalTurn): AssistantView {
     cached: turn.verdict === 'cache_hit',
     incomplete: turn.stopped,
     totalTokens: result?.usage?.total_tokens ?? null,
+    trace: result?.trace ?? [],
   };
 }
 
@@ -65,5 +68,6 @@ export function viewFromMessage(message: ChatMessage): AssistantView {
     cached: verdict === 'cache_hit',
     incomplete: meta.incomplete === true,
     totalTokens: usage ? asNumber(usage.total_tokens) : null,
+    trace: [],
   };
 }

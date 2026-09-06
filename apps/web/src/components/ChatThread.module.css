@@ -1,17 +1,28 @@
 .thread {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  scroll-behavior: smooth;
+}
+
+.inner {
   display: flex;
   flex-direction: column;
   gap: var(--space-5);
-  padding: var(--space-5);
   max-width: var(--content-max);
   width: 100%;
   margin: 0 auto;
+  padding: var(--space-5) var(--space-5) var(--space-6);
 }
 
 .turn {
   display: flex;
   flex-direction: column;
-  gap: var(--space-3);
+  gap: var(--space-4);
+}
+
+.row {
+  animation: rise-in var(--motion-med) var(--ease-out);
 }
 
 .userRow {
@@ -20,13 +31,13 @@
 }
 
 .userBubble {
-  max-width: 80%;
+  max-width: 82%;
   padding: var(--space-3) var(--space-4);
   background: var(--color-primary);
   color: var(--color-primary-ink);
   border-radius: var(--radius-lg);
-  border-top-right-radius: var(--radius-sm);
-  box-shadow: var(--shadow-sm);
+  border-bottom-right-radius: var(--radius-sm);
+  box-shadow: var(--shadow-xs);
 }
 
 .userText {
@@ -38,8 +49,25 @@
   display: block;
   margin-top: var(--space-1);
   font-size: var(--text-xs);
-  opacity: 0.75;
+  opacity: 0.72;
   text-align: right;
+}
+
+.assistantRow {
+  display: flex;
+  gap: var(--space-3);
+  align-items: flex-start;
+}
+
+.avatar {
+  flex: none;
+  margin-top: 2px;
+}
+
+.assistantSlot {
+  min-width: 0;
+  flex: 1;
+  max-width: 88%;
 }
 
 .routing {
@@ -54,6 +82,7 @@
   color: var(--color-ink-muted);
   font-size: var(--text-sm);
   width: fit-content;
+  box-shadow: var(--shadow-xs);
 }
 
 .routingText {
@@ -62,7 +91,7 @@
 
 .dots {
   display: inline-flex;
-  gap: 3px;
+  gap: 4px;
 }
 
 .dots span {
@@ -74,10 +103,10 @@
 }
 
 .dots span:nth-child(2) {
-  animation-delay: 0.2s;
+  animation-delay: 0.15s;
 }
 .dots span:nth-child(3) {
-  animation-delay: 0.4s;
+  animation-delay: 0.3s;
 }
 
 @keyframes pulse {
@@ -88,7 +117,7 @@
   }
   50% {
     opacity: 1;
-    transform: translateY(-2px);
+    transform: translateY(-3px);
   }
 }
 
@@ -109,4 +138,20 @@
 .errorMessage {
   font-size: var(--text-sm);
   color: var(--color-ink-muted);
+}
+
+@media (max-width: 48rem) {
+  .inner {
+    padding: var(--space-4) var(--space-4) var(--space-5);
+    gap: var(--space-4);
+  }
+
+  .assistantSlot,
+  .userBubble {
+    max-width: 100%;
+  }
+
+  .avatar {
+    display: none;
+  }
 }

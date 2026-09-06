@@ -3,6 +3,7 @@
   flex-direction: column;
   height: 100%;
   min-height: 0;
+  width: 100%;
   background: var(--color-bg);
 }
 
@@ -11,7 +12,7 @@
   align-items: center;
   justify-content: space-between;
   gap: var(--space-4);
-  padding: var(--space-4) var(--space-5);
+  padding: var(--space-3) var(--space-5);
   background: var(--color-surface);
   border-bottom: 1px solid var(--color-border);
   flex-wrap: wrap;
@@ -24,13 +25,14 @@
 .title {
   font-size: var(--text-lg);
   font-weight: 600;
+  letter-spacing: var(--tracking-tight);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .subtitle {
-  font-size: var(--text-sm);
+  font-size: var(--text-xs);
   color: var(--color-ink-subtle);
 }
 
@@ -44,12 +46,38 @@
   font-size: var(--text-sm);
   color: var(--color-primary-soft-ink);
   background: var(--color-primary-soft);
+  animation: fade-in var(--motion-fast) var(--ease-standard);
 }
 
 .scroll {
   flex: 1;
   min-height: 0;
-  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+.loading {
+  max-width: var(--content-max);
+  width: 100%;
+  margin: 0 auto;
+  padding: var(--space-6) var(--space-5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.loadingLineShort {
+  height: 1rem;
+  width: 40%;
+}
+.loadingLineLong {
+  height: 3.5rem;
+  width: 80%;
+}
+.loadingLineMed {
+  height: 2.5rem;
+  width: 60%;
+  align-self: flex-end;
 }
 
 .state {
@@ -63,15 +91,17 @@
 }
 
 .empty {
-  max-width: 34rem;
-  margin: 0 auto;
+  max-width: 36rem;
+  margin: auto;
   padding: var(--space-8) var(--space-5);
   text-align: center;
+  animation: rise-in var(--motion-med) var(--ease-out);
 }
 
 .emptyTitle {
-  font-size: var(--text-xl);
-  font-weight: 600;
+  font-size: var(--text-2xl);
+  font-weight: 700;
+  letter-spacing: var(--tracking-tight);
   margin-bottom: var(--space-2);
 }
 
@@ -96,16 +126,34 @@
   border-radius: var(--radius-md);
   color: var(--color-ink);
   text-align: left;
+  font-size: var(--text-sm);
   transition:
-    border-color 0.15s ease,
-    background-color 0.15s ease;
+    border-color var(--motion-fast) var(--ease-standard),
+    background-color var(--motion-fast) var(--ease-standard),
+    transform var(--motion-fast) var(--ease-standard);
 }
 
 .example:hover {
   border-color: var(--color-primary);
   background: var(--color-surface-muted);
+  transform: translateY(-1px);
 }
 
 .composerWrap {
-  padding: var(--space-4) var(--space-5) var(--space-5);
+  padding: var(--space-3) var(--space-5) var(--space-5);
+  background: linear-gradient(to top, var(--color-bg) 70%, transparent);
+}
+
+@media (max-width: 48rem) {
+  .header {
+    padding: var(--space-3) var(--space-4);
+  }
+
+  .composerWrap {
+    padding: var(--space-3) var(--space-3) var(--space-4);
+  }
+
+  .actions .btn {
+    font-size: var(--text-xs);
+  }
 }

@@ -3,6 +3,7 @@ import type { AssistantView } from '../lib/assistant';
 import { Citations } from './Citations';
 import { CrmTable } from './CrmTable';
 import { RouteBadge } from './RouteBadge';
+import { TracePanel } from './TracePanel';
 import styles from './AssistantMessage.module.css';
 
 interface AssistantMessageProps {
@@ -14,7 +15,8 @@ interface AssistantMessageProps {
 // Renders a completed (or streaming) assistant turn. The visual treatment is
 // driven by the answer kind: a refusal reads as a calm boundary, a cache hit
 // carries a quiet "answered instantly" affordance, and a tool-backed answer
-// shows its CRM table, citations, route, and latency.
+// shows its CRM card, citations, route, and latency. The PII-free reasoning
+// trace is available behind an off-by-default disclosure.
 export function AssistantMessage({
   view,
   streaming = false,
@@ -25,7 +27,12 @@ export function AssistantMessage({
   return (
     <div className={styles.message} data-kind={kind}>
       <div className={styles.body}>
-        {kind === 'refusal' && <p className={styles.boundaryLabel}>Outside what I can help with</p>}
+        {kind === 'refusal' && (
+          <p className={styles.boundaryLabel}>
+            <span className={styles.boundaryDot} aria-hidden="true" />
+            Outside what I can help with
+          </p>
+        )}
         <p className={styles.answer}>
           {view.answer}
           {streaming && <span className={styles.caret} aria-hidden="true" />}
@@ -44,6 +51,7 @@ export function AssistantMessage({
           {view.totalTokens !== null && (
             <span className={styles.metaText}>{view.totalTokens} tokens</span>
           )}
+          {view.trace.length > 0 && <TracePanel trace={view.trace} />}
         </div>
       )}
     </div>
