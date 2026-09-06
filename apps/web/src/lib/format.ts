@@ -19,6 +19,50 @@ export function formatTime(iso: string): string {
   return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 }
 
+/** A compact relative time for the session list, e.g. `just now`, `3h`, `2d`. */
+export function formatRelative(iso: string): string {
+  const date = new Date(iso);
+  const ms = Date.now() - date.getTime();
+  if (Number.isNaN(ms)) {
+    return '';
+  }
+  const minutes = Math.floor(ms / 60000);
+  if (minutes < 1) {
+    return 'just now';
+  }
+  if (minutes < 60) {
+    return `${minutes}m`;
+  }
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) {
+    return `${hours}h`;
+  }
+  const days = Math.floor(hours / 24);
+  if (days < 7) {
+    return `${days}d`;
+  }
+  return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
+}
+
+export interface CitationSource {
+  kind: 'web' | 'kb';
+  label: string;
+  href: string | null;
+}
+
+/** Classify a citation as a web URL (host as label) or a KB document title. */
+export function citationSource(value: string): CitationSource {
+  if (/^https?:\/\//i.test(value)) {
+    try {
+      const url = new URL(value);
+      return { kind: 'web', label: url.hostname.replace(/^www\./, ''), href: value };
+    } catch {
+      return { kind: 'web', label: value, href: value };
+    }
+  }
+  return { kind: 'kb', label: value, href: null };
+}
+
 const ROUTE_LABELS: Record<Route, string> = {
   crm: 'Your records',
   rag: 'Knowledge base',
