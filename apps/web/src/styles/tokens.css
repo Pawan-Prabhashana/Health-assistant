@@ -1,26 +1,29 @@
 /*
  * Sahana design tokens.
  *
- * A single source of truth for colour, spacing, radius, type, and elevation.
- * The palette is a calm, clinical set — deep teal as the trust colour, warm
- * neutrals for surfaces, and a small, deliberate set of semantic route colours
- * (CRM, knowledge base, web, direct, refusal, cache) so the different answer
- * kinds read distinctly without becoming a carnival of badges. Every colour is
- * defined for both light and dark schemes; dark is redefined under
- * prefers-color-scheme so the app follows the OS.
+ * The single source of truth for colour, type, space, radius, elevation, and
+ * motion. The palette is calm and clinical — deep teal as the trust colour, warm
+ * neutrals for surfaces, and a small, deliberate set of semantic route accents
+ * (CRM, knowledge base, web, direct, refusal, cache) so answer kinds read
+ * distinctly without a carnival of badges.
+ *
+ * Theming has three states. Bare :root is the complete light palette. The dark
+ * palette is applied two ways: automatically under prefers-color-scheme (unless
+ * the viewer explicitly chose light), and explicitly when the in-app toggle sets
+ * data-theme="dark". The toggle therefore wins over the OS in both directions.
  */
 
 :root {
   /* Neutral surfaces and ink. */
-  --color-bg: #f4f6f8;
+  --color-bg: #f3f5f8;
   --color-surface: #ffffff;
-  --color-surface-muted: #f8fafc;
+  --color-surface-muted: #f6f8fb;
   --color-surface-raised: #ffffff;
-  --color-border: #e2e8f0;
+  --color-border: #e4e9f0;
   --color-border-strong: #cbd5e1;
-  --color-ink: #0f172a;
-  --color-ink-muted: #52657a;
-  --color-ink-subtle: #7c8da0;
+  --color-ink: #101826;
+  --color-ink-muted: #51637a;
+  --color-ink-subtle: #8494a6;
 
   /* Brand / primary (deep teal). */
   --color-primary: #0f766e;
@@ -46,11 +49,15 @@
   --route-web: #1d4ed8;
   --route-web-soft: #dbeafe;
   --route-direct: #475569;
-  --route-direct-soft: #e2e8f0;
+  --route-direct-soft: #e8edf3;
   --route-refusal: #9f5b53;
   --route-refusal-soft: #f4e6e3;
   --route-cache: #15803d;
   --route-cache-soft: #dcfce7;
+
+  /* Backdrop tint used behind the app shell and landing. */
+  --color-glow: rgba(15, 118, 110, 0.1);
+  --color-overlay: rgba(9, 16, 22, 0.45);
 
   /* Typography. */
   --font-sans: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
@@ -62,8 +69,11 @@
   --text-lg: 1.125rem;
   --text-xl: 1.375rem;
   --text-2xl: 1.75rem;
-  --leading-tight: 1.3;
+  --text-3xl: 2.25rem;
+  --leading-tight: 1.25;
   --leading-normal: 1.55;
+  --tracking-tight: -0.011em;
+  --tracking-wide: 0.04em;
 
   /* Spacing scale (4px base). */
   --space-1: 0.25rem;
@@ -72,40 +82,52 @@
   --space-4: 1rem;
   --space-5: 1.5rem;
   --space-6: 2rem;
+  --space-7: 2.5rem;
   --space-8: 3rem;
 
   /* Radius and elevation. */
   --radius-sm: 0.375rem;
   --radius-md: 0.625rem;
   --radius-lg: 0.875rem;
+  --radius-xl: 1.25rem;
   --radius-full: 999px;
-  --shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.06);
-  --shadow-md: 0 4px 16px rgba(15, 23, 42, 0.08);
-  --shadow-lg: 0 12px 32px rgba(15, 23, 42, 0.12);
+  --shadow-xs: 0 1px 2px rgba(15, 23, 42, 0.05);
+  --shadow-sm: 0 1px 3px rgba(15, 23, 42, 0.07);
+  --shadow-md: 0 6px 20px rgba(15, 23, 42, 0.09);
+  --shadow-lg: 0 16px 40px rgba(15, 23, 42, 0.14);
+
+  /* Motion vocabulary — quick, calm, never bouncy. */
+  --motion-fast: 120ms;
+  --motion-med: 220ms;
+  --motion-slow: 360ms;
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-standard: cubic-bezier(0.4, 0, 0.2, 1);
 
   /* Layout. */
   --sidebar-width: 18rem;
-  --content-max: 52rem;
-  --header-height: 3.5rem;
+  --content-max: 50rem;
+  --header-height: 3.75rem;
 }
 
+/* Dark palette, shared by the OS preference (unless overridden to light) and the
+ * explicit dark toggle. */
 @media (prefers-color-scheme: dark) {
-  :root {
-    --color-bg: #0b1016;
-    --color-surface: #131a22;
-    --color-surface-muted: #0f151c;
-    --color-surface-raised: #1a232d;
-    --color-border: #26323d;
-    --color-border-strong: #364250;
-    --color-ink: #e6edf3;
-    --color-ink-muted: #9fb0c0;
+  :root:not([data-theme='light']) {
+    --color-bg: #0a0f15;
+    --color-surface: #121a23;
+    --color-surface-muted: #0e151d;
+    --color-surface-raised: #18222d;
+    --color-border: #253039;
+    --color-border-strong: #37454f;
+    --color-ink: #e7eef4;
+    --color-ink-muted: #a2b2c1;
     --color-ink-subtle: #6b7d8f;
 
     --color-primary: #2dd4bf;
     --color-primary-hover: #5eead4;
-    --color-primary-ink: #05201d;
-    --color-primary-soft: #0f2f2b;
-    --color-primary-soft-ink: #99f6e4;
+    --color-primary-ink: #04211d;
+    --color-primary-soft: #103430;
+    --color-primary-soft-ink: #9df0e4;
     --color-focus: #2dd4bf;
 
     --color-ok: #4ade80;
@@ -118,7 +140,7 @@
     --route-crm: #a5b4fc;
     --route-crm-soft: #1e1b4b;
     --route-rag: #5eead4;
-    --route-rag-soft: #0f2f2b;
+    --route-rag-soft: #103430;
     --route-web: #93c5fd;
     --route-web-soft: #172554;
     --route-direct: #cbd5e1;
@@ -127,5 +149,60 @@
     --route-refusal-soft: #33211d;
     --route-cache: #4ade80;
     --route-cache-soft: #0f2a1a;
+
+    --color-glow: rgba(45, 212, 191, 0.12);
+    --color-overlay: rgba(0, 0, 0, 0.55);
+
+    --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.4);
+    --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.45);
+    --shadow-md: 0 6px 20px rgba(0, 0, 0, 0.5);
+    --shadow-lg: 0 16px 40px rgba(0, 0, 0, 0.6);
   }
+}
+
+:root[data-theme='dark'] {
+  --color-bg: #0a0f15;
+  --color-surface: #121a23;
+  --color-surface-muted: #0e151d;
+  --color-surface-raised: #18222d;
+  --color-border: #253039;
+  --color-border-strong: #37454f;
+  --color-ink: #e7eef4;
+  --color-ink-muted: #a2b2c1;
+  --color-ink-subtle: #6b7d8f;
+
+  --color-primary: #2dd4bf;
+  --color-primary-hover: #5eead4;
+  --color-primary-ink: #04211d;
+  --color-primary-soft: #103430;
+  --color-primary-soft-ink: #9df0e4;
+  --color-focus: #2dd4bf;
+
+  --color-ok: #4ade80;
+  --color-ok-soft: #0f2a1a;
+  --color-warn: #fbbf24;
+  --color-warn-soft: #2a2109;
+  --color-danger: #f87171;
+  --color-danger-soft: #2a1414;
+
+  --route-crm: #a5b4fc;
+  --route-crm-soft: #1e1b4b;
+  --route-rag: #5eead4;
+  --route-rag-soft: #103430;
+  --route-web: #93c5fd;
+  --route-web-soft: #172554;
+  --route-direct: #cbd5e1;
+  --route-direct-soft: #1e293b;
+  --route-refusal: #e7b3aa;
+  --route-refusal-soft: #33211d;
+  --route-cache: #4ade80;
+  --route-cache-soft: #0f2a1a;
+
+  --color-glow: rgba(45, 212, 191, 0.12);
+  --color-overlay: rgba(0, 0, 0, 0.55);
+
+  --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.45);
+  --shadow-md: 0 6px 20px rgba(0, 0, 0, 0.5);
+  --shadow-lg: 0 16px 40px rgba(0, 0, 0, 0.6);
 }

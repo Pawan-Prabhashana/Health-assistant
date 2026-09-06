@@ -13,6 +13,20 @@
   box-sizing: border-box;
 }
 
+/* Keep native form controls, scrollbars, and the canvas in step with the theme,
+ * including the explicit toggle. */
+:root {
+  color-scheme: light;
+}
+:root[data-theme='dark'] {
+  color-scheme: dark;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    color-scheme: dark;
+  }
+}
+
 html,
 body,
 #root {
@@ -26,6 +40,7 @@ body {
   font-family: var(--font-sans);
   font-size: var(--text-base);
   line-height: var(--leading-normal);
+  letter-spacing: var(--tracking-tight);
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizelegibility;
 }
@@ -98,9 +113,23 @@ a {
   cursor: not-allowed;
 }
 
+.btn {
+  transition:
+    background-color var(--motion-fast) var(--ease-standard),
+    border-color var(--motion-fast) var(--ease-standard),
+    color var(--motion-fast) var(--ease-standard),
+    transform var(--motion-fast) var(--ease-standard),
+    opacity var(--motion-fast) var(--ease-standard);
+}
+
+.btn:not(:disabled):active {
+  transform: translateY(1px);
+}
+
 .btn--primary {
   background: var(--color-primary);
   color: var(--color-primary-ink);
+  box-shadow: var(--shadow-xs);
 }
 
 .btn--primary:not(:disabled):hover {
@@ -146,14 +175,72 @@ a {
   color: var(--color-ink);
 }
 
+.text-input {
+  transition:
+    border-color var(--motion-fast) var(--ease-standard),
+    box-shadow var(--motion-fast) var(--ease-standard);
+}
+
+.text-input:focus-visible {
+  outline: none;
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px var(--color-primary-soft);
+}
+
 .text-input::placeholder {
   color: var(--color-ink-subtle);
 }
 
+/* Shared motion keyframes used across modules. */
+@keyframes rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes shimmer {
+  from {
+    background-position: -200% 0;
+  }
+  to {
+    background-position: 200% 0;
+  }
+}
+
+/* A reusable skeleton block for loading states. */
+.skeleton {
+  background: linear-gradient(
+    90deg,
+    var(--color-surface-muted) 25%,
+    var(--color-border) 37%,
+    var(--color-surface-muted) 63%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.4s ease-in-out infinite;
+  border-radius: var(--radius-sm);
+}
+
 @media (prefers-reduced-motion: reduce) {
-  * {
+  *,
+  *::before,
+  *::after {
     animation-duration: 0.001ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
   }
 }
