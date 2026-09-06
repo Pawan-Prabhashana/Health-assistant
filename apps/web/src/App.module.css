@@ -8,6 +8,21 @@
   flex: 1;
   min-height: 0;
   display: flex;
+  position: relative;
+}
+
+.sidebarDock {
+  flex: none;
+  width: var(--sidebar-width);
+  min-height: 0;
+  display: flex;
+}
+
+.main {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
 }
 
 .placeholder {
@@ -17,7 +32,11 @@
   justify-content: center;
   padding: var(--space-6);
   text-align: center;
-  color: var(--color-ink-muted);
+}
+
+.placeholderInner {
+  max-width: 22rem;
+  animation: fade-in var(--motion-med) var(--ease-out);
 }
 
 .placeholderTitle {
@@ -31,8 +50,35 @@
   color: var(--color-ink-muted);
 }
 
-@media (max-width: 40rem) {
-  .workspace {
-    flex-direction: column;
+.overlay {
+  display: none;
+}
+
+/* Mobile: the sidebar becomes an off-canvas drawer with an overlay. */
+@media (max-width: 48rem) {
+  .sidebarDock {
+    position: fixed;
+    z-index: 30;
+    top: var(--header-height);
+    bottom: 0;
+    left: 0;
+    width: min(20rem, 82vw);
+    transform: translateX(-102%);
+    transition: transform var(--motion-med) var(--ease-out);
+    box-shadow: var(--shadow-lg);
+  }
+
+  .sidebarDock[data-open='true'] {
+    transform: translateX(0);
+  }
+
+  .overlay {
+    display: block;
+    position: fixed;
+    z-index: 20;
+    inset: var(--header-height) 0 0 0;
+    border: none;
+    background: var(--color-overlay);
+    animation: fade-in var(--motion-fast) var(--ease-standard);
   }
 }

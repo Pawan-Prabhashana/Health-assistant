@@ -14,21 +14,38 @@ import styles from './App.module.css';
 
 function ChatWorkspace({ phone }: { phone: string }): React.JSX.Element {
   const activeSessionId = useSessionState((state) => state.activeSessionId);
+  const sidebarOpen = useSessionState((state) => state.sidebarOpen);
+  const setSidebarOpen = useSessionState((state) => state.setSidebarOpen);
+
   return (
     <div className={styles.workspace}>
-      <SessionSidebar phone={phone} />
-      {activeSessionId !== null ? (
-        <ChatPanel key={activeSessionId} sessionId={activeSessionId} phone={phone} />
-      ) : (
-        <div className={styles.placeholder}>
-          <div>
-            <h2 className={styles.placeholderTitle}>Select a conversation</h2>
-            <p className={styles.placeholderBody}>
-              Choose a conversation on the left, or start a new one to begin.
-            </p>
-          </div>
-        </div>
+      <div className={styles.sidebarDock} data-open={sidebarOpen}>
+        <SessionSidebar phone={phone} />
+      </div>
+      {sidebarOpen && (
+        <button
+          type="button"
+          className={styles.overlay}
+          aria-label="Close conversations"
+          onClick={() => {
+            setSidebarOpen(false);
+          }}
+        />
       )}
+      <main className={styles.main}>
+        {activeSessionId !== null ? (
+          <ChatPanel key={activeSessionId} sessionId={activeSessionId} phone={phone} />
+        ) : (
+          <div className={styles.placeholder}>
+            <div className={styles.placeholderInner}>
+              <h2 className={styles.placeholderTitle}>Select a conversation</h2>
+              <p className={styles.placeholderBody}>
+                Choose a conversation, or start a new one to begin.
+              </p>
+            </div>
+          </div>
+        )}
+      </main>
     </div>
   );
 }

@@ -1,12 +1,29 @@
 .bar {
   display: flex;
   align-items: center;
-  gap: var(--space-4);
+  gap: var(--space-3);
   height: var(--header-height);
   padding: 0 var(--space-5);
-  background: var(--color-surface);
+  background: color-mix(in srgb, var(--color-surface) 85%, transparent);
+  backdrop-filter: saturate(1.4) blur(8px);
   border-bottom: 1px solid var(--color-border);
   flex: none;
+}
+
+.menu {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  color: var(--color-ink-muted);
+}
+
+.menu:hover {
+  color: var(--color-ink);
 }
 
 .brand {
@@ -15,28 +32,19 @@
   gap: var(--space-2);
 }
 
-.mark {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 1.9rem;
-  height: 1.9rem;
-  border-radius: var(--radius-sm);
-  background: var(--color-primary);
-  color: var(--color-primary-ink);
-  font-weight: 700;
-}
-
 .wordmark {
   font-weight: 700;
   font-size: var(--text-lg);
+  letter-spacing: var(--tracking-tight);
 }
 
 .nav {
   display: flex;
   gap: var(--space-1);
-  padding: var(--space-1);
+  padding: 3px;
+  margin-left: var(--space-2);
   background: var(--color-surface-muted);
+  border: 1px solid var(--color-border);
   border-radius: var(--radius-full);
 }
 
@@ -48,14 +56,48 @@
   font-size: var(--text-sm);
   font-weight: 600;
   color: var(--color-ink-muted);
+  transition:
+    background-color var(--motion-fast) var(--ease-standard),
+    color var(--motion-fast) var(--ease-standard),
+    box-shadow var(--motion-fast) var(--ease-standard);
+}
+
+.tab:hover {
+  color: var(--color-ink);
 }
 
 .tab[data-active='true'] {
   background: var(--color-surface);
-  color: var(--color-ink);
-  box-shadow: var(--shadow-sm);
+  color: var(--color-primary);
+  box-shadow: var(--shadow-xs);
 }
 
 .right {
   margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+@media (max-width: 48rem) {
+  .bar {
+    padding: 0 var(--space-4);
+    gap: var(--space-2);
+  }
+
+  .menu {
+    display: inline-flex;
+  }
+
+  .wordmark {
+    display: none;
+  }
+
+  .nav {
+    margin-left: 0;
+  }
+
+  .tab {
+    padding: var(--space-1) var(--space-3);
+  }
 }
