@@ -2,7 +2,7 @@
 
 Each ADR captures one significant decision, its context, and its consequences.
 They are immutable once accepted; a later ADR supersedes an earlier one rather
-than editing it. The full set (0001–0015) below spans the ten-phase build.
+than editing it. The full set (0001–0016) below spans the ten-phase build.
 
 | ADR | Title | Phase |
 | --- | ----- | ----- |
@@ -21,3 +21,4 @@ than editing it. The full set (0001–0015) below spans the ten-phase build.
 | [0013](0013-frontend-architecture.md) | Frontend architecture | 7 |
 | [0014](0014-shipping-and-deployment.md) | Shipping and deployment | 8 |
 | [0015](0015-operational-hardening.md) | Operational hardening and close-out | 9 |
+| [0016](0016-ui-experience-polish.md) | UI and experience polish | 10 |

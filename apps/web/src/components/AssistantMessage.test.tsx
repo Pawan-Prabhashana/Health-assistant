@@ -15,6 +15,7 @@ function view(overrides: Partial<AssistantView> = {}): AssistantView {
     cached: false,
     incomplete: false,
     totalTokens: null,
+    trace: [],
     ...overrides,
   };
 }
