@@ -1,3 +1,4 @@
+import logoUrl from '../assets/Sahana Logo.png';
 import styles from './Logo.module.css';
 
 interface LogoProps {
@@ -7,30 +8,13 @@ interface LogoProps {
   withWordmark?: boolean;
 }
 
-// The Sahana brand: a rounded teal tile carrying a calm heartbeat glyph — a
-// clinical, trustworthy mark drawn inline (no external asset) so it themes with
-// the palette and stays crisp at any size.
+// The Sahana brand mark: the project logo (Sahana Logo.png), the same artwork the
+// README uses. Rendered as an <img> so it stays crisp; the source is bundled by
+// Vite (hashed, same-origin), so it satisfies the app's img-src 'self' CSP.
 export function Logo({ size = 28, withWordmark = false }: LogoProps): React.JSX.Element {
   return (
     <span className={styles.logo}>
-      <svg
-        className={styles.mark}
-        width={size}
-        height={size}
-        viewBox="0 0 32 32"
-        role="img"
-        aria-label="Sahana"
-      >
-        <rect className={styles.tile} x="0" y="0" width="32" height="32" rx="8" />
-        <path
-          className={styles.pulse}
-          d="M6 17.5h4l2.2-5.5 3.4 9 2.2-5 1.4 2h4.4"
-          fill="none"
-          strokeWidth="2.2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-      </svg>
+      <img className={styles.mark} src={logoUrl} width={size} height={size} alt="Sahana" />
       {withWordmark && <span className={styles.wordmark}>Sahana</span>}
     </span>
   );
